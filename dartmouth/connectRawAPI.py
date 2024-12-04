@@ -63,6 +63,8 @@ def generateInstructions(prompt, parameters):
         "seed": None,
         "stop": ["photographer"],
         "temperature": 0.5,
+        # "top_tokens": [1, 2],
+        # "top_tokens": [ {"id": 0, "logprob": -0.34, "special": False, "text": "test"}],
         "top_k": 10,
         "top_n_tokens": 5,
         "top_p": 0.95,
@@ -91,6 +93,7 @@ def sendInstructions(apiURL, key, token, prompt, parameters):
 
     if response.status_code != 200:
         print(f"Error: {response.status_code} : {response.text}")
+        exit()
     else:
         try:
             json_response = response.json()
