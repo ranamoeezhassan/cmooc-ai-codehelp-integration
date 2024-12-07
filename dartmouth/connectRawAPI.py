@@ -52,25 +52,8 @@ def generateInstructions(prompt, parameters):
     prompt = f"<s> [INST] {prompt} [/INST]"
     if parameters == None:
         parameters = {
-        "best_of": 1,
-        "decoder_input_details": True,
-        "details": True,
-        "do_sample": True,
-        "frequency_penalty": 0.1,
         "max_new_tokens": 500,
-        "repetition_penalty": 1.03,
         "return_full_text": False,
-        "seed": None,
-        "stop": ["photographer"],
-        "temperature": 0.5,
-        # "top_tokens": [1, 2],
-        # "top_tokens": [ {"id": 0, "logprob": -0.34, "special": False, "text": "test"}],
-        "top_k": 10,
-        "top_n_tokens": 5,
-        "top_p": 0.95,
-        "truncate": None,
-        "typical_p": 0.95,
-        "watermark": True
         }
 
     return prompt, parameters
