@@ -73,8 +73,12 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
     app_config = dict(
         APPLICATION_TITLE='CodeHelp',
         DARTMOUTH_API_KEY=os.environ.get('DARTMOUTH_API_KEY'),
+        APPLICATION_AUTHOR='Mark Liffiton, Modified by Rana Moeez Hassan',
         DEFAULT_MODEL='codellama-13b-instruct-hf',
-        DATABASE_NAME='codehelp.db',  # Add this line
+        DATABASE_NAME='codehelp.db',
+        HELP_LINK_TEXT='Get Help',
+        SUPPORT_EMAIL='rana.moeez.hassan.ug@dartmouth.edu',
+        FAVICON='icon.png',
         DOCS_DIR=Path(__file__).resolve().parent / 'docs',
         DEFAULT_LANGUAGES=[
             "Conceptual Question",
