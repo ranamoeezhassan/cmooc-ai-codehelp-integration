@@ -17,3 +17,5 @@ venv/
 .aider*
 
 cmoocenv
+
+.DS_Store

@@ -129,8 +129,8 @@ def set_user_class_setting() -> Response:
     # only trust class_id from auth, not from user
     class_id = auth['class_id']
 
-    if 'clear_openai_key' in request.form:
-        db.execute("UPDATE classes_user SET openai_key='' WHERE class_id=?", [class_id])
+    if 'clear_dartmouth_key' in request.form:  # Changed from clear_openai_key
+        db.execute("UPDATE classes_user SET dartmouth_key='' WHERE class_id=?", [class_id])  # Changed from openai_key
         db.commit()
         flash("Class API key cleared.", "success")
 
@@ -151,8 +151,11 @@ def set_user_class_setting() -> Response:
         flash("Class access configuration updated.", "success")
 
     elif 'save_llm_form' in request.form:
-        if 'openai_key' in request.form:
-            db.execute("UPDATE classes_user SET openai_key=? WHERE class_id=?", [request.form['openai_key'], class_id])
+        if 'dartmouth_key' in request.form:  # Changed from openai_key
+            db.execute(
+                "UPDATE classes_user SET dartmouth_key=? WHERE class_id=?",  # Changed from openai_key
+                [request.form['dartmouth_key'], class_id]  # Changed from openai_key
+            )
         db.execute("UPDATE classes_user SET model_id=? WHERE class_id=?", [request.form['model_id'], class_id])
         db.commit()
         flash("Class language model configuration updated.", "success")

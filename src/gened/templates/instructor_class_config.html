@@ -1,244 +1,243 @@
 {#
-SPDX-FileCopyrightText: 2023 Mark Liffiton <liffiton@gmail.com>
-
-SPDX-License-Identifier: AGPL-3.0-only
-#}
-
-{% extends "base.html" %}
-
-{% block body %}
-<style type="text/css">
-.section {
-  padding: 2rem;
-  max-width: 1600px;
-  margin: auto;
-}
-.conf_cols {
-  display: flex;
-  justify-content: center;
-  gap: 1em;
-}
-@media (max-width: 1200px) {
-  /* flip to column below a given width (instead of just using flex-wrap) so any .sep item becomes a horizontal line */
-  .conf_cols { flex-direction: column; }
-}
-.conf_col_sep {
-  /* draw a line between config sections */
-  border: 2px solid #ccc;
-}
-.conf_col .field-body {
-  /* override bulma sizing for these forms */
-  flex-grow: 2;
-}
-.conf_col input[type='checkbox'],
-.conf_col input[type='radio'] {
-  transform: scale(2.0);
-  margin: 0.5rem;
-  margin-top: 0.8rem;
-}
-</style>
-<section class="section">
-  <h1 class="title">{{ auth['class_name'] }} Configuration</h1>
-  <div class="conf_cols">
-    <div class="conf_col">
-      <h2 class="title is-size-4">Access</h2>
-      <form action="{{ url_for("instructor.set_user_class_setting") }}" method="post">
-        <div class="field is-horizontal">
-          <div class="field-label is-normal">
-            <label class="label" for="class_enabled">Class Active:</label>
-            <p class="help-text">When not active, a class is "archived": users can still see old queries, but no new queries can be made.</p>
-          </div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control">
-                <input name="class_enabled" id="class_enabled" type="checkbox" {% if class_row['enabled'] %}checked{% endif %}>
-              </div>
+  SPDX-FileCopyrightText: 2023 Mark Liffiton <liffiton@gmail.com>
+  
+  SPDX-License-Identifier: AGPL-3.0-only
+  #}
+  
+  {% extends "base.html" %}
+  
+  {% block body %}
+  <style type="text/css">
+  .section {
+    padding: 2rem;
+    max-width: 1600px;
+    margin: auto;
+  }
+  .conf_cols {
+    display: flex;
+    justify-content: center;
+    gap: 1em;
+  }
+  @media (max-width: 1200px) {
+    /* flip to column below a given width (instead of just using flex-wrap) so any .sep item becomes a horizontal line */
+    .conf_cols { flex-direction: column; }
+  }
+  .conf_col_sep {
+    /* draw a line between config sections */
+    border: 2px solid #ccc;
+  }
+  .conf_col .field-body {
+    /* override bulma sizing for these forms */
+    flex-grow: 2;
+  }
+  .conf_col input[type='checkbox'],
+  .conf_col input[type='radio'] {
+    transform: scale(2.0);
+    margin: 0.5rem;
+    margin-top: 0.8rem;
+  }
+  </style>
+  <section class="section">
+    <h1 class="title">{{ auth['class_name'] }} Configuration</h1>
+    <div class="conf_cols">
+      <div class="conf_col">
+        <h2 class="title is-size-4">Access</h2>
+        <form action="{{ url_for("instructor.set_user_class_setting") }}" method="post">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label" for="class_enabled">Class Active:</label>
+              <p class="help-text">When not active, a class is "archived": users can still see old queries, but no new queries can be made.</p>
             </div>
-          </div>
-        </div>
-
-        {% if class_row['link_ident'] %}
-        {# link_ident only in classes_user, so will only be set for user classes. #}
-
-        <div class="field is-horizontal">
-          <div class="field-label">
-            <label class="label">Access/Join Link:</label>
-          </div>
-          <div class="field-body">
-            <div class="field">
-              {{ url_for("classes.access_class", class_ident=class_row['link_ident'], _external=True) }}
-            </div>
-          </div>
-        </div>
-
-        <div class="field is-horizontal">
-          <div class="field-label is-normal">
-            <label class="label">Registration via Link:</label>
-            <p class="help-text">When enabled, any users who access the class link will be registered automatically.</p>
-            <p class="help-text">When disabled, only already-registered users can access the class via its link.</p>
-          </div>
-          <div class="field-body">
-            <div class="field" x-data="{ link_reg_active: '{{ link_reg_state }}' }">
-              <div class="control">
-                <input type="hidden" name="link_reg_active_present" value="true">
-                <label class="radio">
-                  <input name="link_reg_active" x-model="link_reg_active" id="link_reg_disabled" type="radio" value="disabled" {% if link_reg_state == "disabled" %}checked{% endif %}>
-                  Disabled
-                </label>
-              </div>
-              <div class="control">
-                <label class="radio">
-                  <input name="link_reg_active" x-model="link_reg_active" id="link_reg_expires" type="radio" value="date" {% if link_reg_state == "date" %}checked{% endif %}>
-                  Only until:
-                </label>
-                <input required class="input" name="link_reg_expires" x-bind:disabled="link_reg_active !== 'date'" type="date" style="width: inherit; vertical-align: baseline;" value="{{ class_row.link_reg_expires if link_reg_state == "date" else "" }}">
-                <em class="has-text-grey">anywhere on Earth</em>
-              </div>
-              <div class="control">
-                <label class="radio">
-                  <input name="link_reg_active" x-model="link_reg_active" id="link_reg_enabled" type="radio" value="enabled" {% if class_row.link_reg_state == "enabled" %}checked{% endif %}>
-                  Enabled
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endif %}{# end if class['link_ident'] -- i.e., end of user-created class config #}
-
-        <div class="field is-horizontal">
-          <div class="field-label is-normal"><!-- spacing --></div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control">
-                <button class="button is-link" type="submit" name="save_access_form">Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </form>
-
-      {% if class_row['link_ident'] %}
-      {# link_ident only in classes_user, so will only be set for user classes. #}
-      <div class="conf_col_sep mt-5"></div>
-
-      <h2 class="title is-size-4 mt-5">Language Model</h2>
-      <form action="{{ url_for("instructor.set_user_class_setting") }}" method="post" x-data="{
-          llm_config_saved: {{ 'true' if class_row.openai_key else 'false' }},
-          llm_test_loading: false,
-          llm_test_result: null,
-          dialog: document.querySelector('#llm_test_dialog'),
-          showDialog() {
-            this.dialog.showModal();
-          },
-          test_llm() {
-            this.llm_test_loading = true;
-            fetch('{{url_for('class_config.test_llm')}}')
-              .then(response => response.text())
-              .then(text => {
-                this.llm_test_loading = false;
-                this.llm_test_result = text;
-                if (text !== 'ok') {
-                  this.showDialog();
-                }
-              })
-          },
-      }">
-        <div class="field is-horizontal">
-          <div class="field-label is-normal">
-            <label class="label">OpenAI API Key:</label>
-            <p class="help-text">Your key must be in a <a href="https://platform.openai.com/docs/guides/rate-limits/usage-tiers">usage tier</a> that allows for the level of usage you expect.  The free tier does not support the models used here.</p>
-            <p class="help-text">If blank, users in this class will not be able to submit queries.</p>
-          </div>
-          <div class="field-body">
-            {% if class_row.openai_key %}
-              <div style="margin-top: 0.375rem;" x-data="{show_confirm: false}">
-                {{ "*" * 20 + class_row.openai_key[-4:] }}
-                <button class="button is-danger is-small ml-3" type="button" @click="show_confirm=true" x-bind:disabled="show_confirm"><span class="delete mr-2"></span> Clear OpenAI Key</button>
-                <button class="button is-danger is-small" type="submit" name="clear_openai_key" x-show="show_confirm"><b>Confirm</b>&nbsp;clear OpenAI Key</button>
-              </div>
-            {% else %}
+            <div class="field-body">
               <div class="field">
                 <div class="control">
-                  <input class="input" name="openai_key">
-                </div>
-              </div>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="field is-horizontal">
-          <div class="field-label is-normal">
-            <label class="label" for="model_id">Model:</label>
-          </div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control">
-                <div class="select">
-                  <select required name="model_id" id="model_id" x-on:change="llm_config_saved=false">
-                    <option value="">Please select one</option>
-                    {% for model in models %}
-                      <option value="{{model.id}}" {% if model.id == class_row.model_id %}selected{% endif %}>{{model.name}}</option>
-                    {% endfor %}
-                  </select>
+                  <input name="class_enabled" id="class_enabled" type="checkbox" {% if class_row['enabled'] %}checked{% endif %}>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="field is-horizontal">
-          <div class="field-label is-normal"><!-- spacing --></div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control">
-                <button class="button is-link" type="submit" name="save_llm_form">Save</button>
+  
+          {% if class_row['link_ident'] %}
+          {# link_ident only in classes_user, so will only be set for user classes. #}
+  
+          <div class="field is-horizontal">
+            <div class="field-label">
+              <label class="label">Access/Join Link:</label>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                {{ url_for("classes.access_class", class_ident=class_row['link_ident'], _external=True) }}
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="field is-horizontal">
-          <div class="field-label is-normal"><!-- spacing --></div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control buttons">
-                <button class="button" type="button" x-bind:disabled="!llm_config_saved || llm_test_result" x-on:click="test_llm()">Test saved key &amp; model</button>
-                <button class="button" type="button"
-                  x-bind:class="llm_test_loading ? 'is-loading' : llm_test_result==='ok' ? 'is-success' : 'is-danger'"
-                  x-show="llm_test_loading || llm_test_result"
-                  x-text="llm_test_loading ? '' : llm_test_result === 'ok' ? 'Success!' : 'Error!'"
-                  x-on:click="showDialog"></button>
+  
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Registration via Link:</label>
+              <p class="help-text">When enabled, any users who access the class link will be registered automatically.</p>
+              <p class="help-text">When disabled, only already-registered users can access the class via its link.</p>
+            </div>
+            <div class="field-body">
+              <div class="field" x-data="{ link_reg_active: '{{ link_reg_state }}' }">
+                <div class="control">
+                  <input type="hidden" name="link_reg_active_present" value="true">
+                  <label class="radio">
+                    <input name="link_reg_active" x-model="link_reg_active" id="link_reg_disabled" type="radio" value="disabled" {% if link_reg_state == "disabled" %}checked{% endif %}>
+                    Disabled
+                  </label>
+                </div>
+                <div class="control">
+                  <label class="radio">
+                    <input name="link_reg_active" x-model="link_reg_active" id="link_reg_expires" type="radio" value="date" {% if link_reg_state == "date" %}checked{% endif %}>
+                    Only until:
+                  </label>
+                  <input required class="input" name="link_reg_expires" x-bind:disabled="link_reg_active !== 'date'" type="date" style="width: inherit; vertical-align: baseline;" value="{{ class_row.link_reg_expires if link_reg_state == "date" else "" }}">
+                  <em class="has-text-grey">anywhere on Earth</em>
+                </div>
+                <div class="control">
+                  <label class="radio">
+                    <input name="link_reg_active" x-model="link_reg_active" id="link_reg_enabled" type="radio" value="enabled" {% if class_row.link_reg_state == "enabled" %}checked{% endif %}>
+                    Enabled
+                  </label>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <dialog id="llm_test_dialog">
-          <div class="notification"
-               x-bind:class="llm_test_result === 'ok' ? 'is-success' : 'is-danger'"
-               x-html="llm_test_result === 'ok' ? 'Your API key and chosen model worked!' : llm_test_result">
+          {% endif %}{# end if class['link_ident'] -- i.e., end of user-created class config #}
+  
+          <div class="field is-horizontal">
+            <div class="field-label is-normal"><!-- spacing --></div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <button class="button is-link" type="submit" name="save_access_form">Save</button>
+                </div>
+              </div>
+            </div>
           </div>
-        </dialog>
-
-      </form>
-
-      {% endif %}{# end if class['link_ident'] -- i.e., end of user-created class config #}
-
-    </div>
-
-    {% if extra_sections %}
-    <div class="conf_col_sep"></div>
-    <div class="conf_col">
-      {% for extra_section in extra_sections %}
-        {{ extra_section }}
-        {% if not loop.last %}
-          <div class="conf_col_sep mt-5 mb-5"></div>
-        {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
-</section>
-
-{% endblock %}
+  
+        </form>
+  
+        {% if class_row['link_ident'] %}
+        {# link_ident only in classes_user, so will only be set for user classes. #}
+        <div class="conf_col_sep mt-5"></div>
+  
+        <h2 class="title is-size-4 mt-5">Language Model</h2>
+        <form action="{{ url_for("instructor.set_user_class_setting") }}" method="post" x-data="{
+            llm_config_saved: {{ 'true' if class_row.openai_key else 'false' }},
+            llm_test_loading: false,
+            llm_test_result: null,
+            dialog: document.querySelector('#llm_test_dialog'),
+            showDialog() {
+              this.dialog.showModal();
+            },
+            test_llm() {
+              this.llm_test_loading = true;
+              fetch('{{url_for('class_config.test_llm')}}')
+                .then(response => response.text())
+                .then(text => {
+                  this.llm_test_loading = false;
+                  this.llm_test_result = text;
+                  if (text !== 'ok') {
+                    this.showDialog();
+                  }
+                })
+            },
+        }">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Dartmouth API Key:</label>
+              <p class="help-text">If blank, users in this class will not be able to submit queries.</p>
+            </div>
+            <div class="field-body">
+              {% if class_row.dartmouth_key %}
+                <div style="margin-top: 0.375rem;" x-data="{show_confirm: false}">
+                  {{ "*" * 20 + class_row.dartmouth_key[-4:] }}
+                  <button class="button is-danger is-small ml-3" type="button" @click="show_confirm=true" x-bind:disabled="show_confirm"><span class="delete mr-2"></span> Clear Dartmouth API Key</button>
+                  <button class="button is-danger is-small" type="submit" name="clear_dartmouth_key" x-show="show_confirm"><b>Confirm</b>&nbsp;clear Dartmouth API Key</button>
+                </div>
+              {% else %}
+                <div class="field">
+                  <div class="control">
+                    <input class="input" name="dartmouth_key">
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+  
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label" for="model_id">Model:</label>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <div class="select">
+                    <select required name="model_id" id="model_id" x-on:change="llm_config_saved=false">
+                      <option value="">Please select one</option>
+                      {% for model in models %}
+                        <option value="{{model.id}}" {% if model.id == class_row.model_id %}selected{% endif %}>{{model.name}}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <div class="field is-horizontal">
+            <div class="field-label is-normal"><!-- spacing --></div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <button class="button is-link" type="submit" name="save_llm_form">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <div class="field is-horizontal">
+            <div class="field-label is-normal"><!-- spacing --></div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control buttons">
+                  <!-- <button class="button" type="button" x-bind:disabled="!llm_config_saved || llm_test_result" x-on:click="test_llm()">Test saved key &amp; model</button> -->
+                  <button class="button" type="button"
+                    x-bind:class="llm_test_loading ? 'is-loading' : llm_test_result==='ok' ? 'is-success' : 'is-danger'"
+                    x-show="llm_test_loading || llm_test_result"
+                    x-text="llm_test_loading ? '' : llm_test_result === 'ok' ? 'Success!' : 'Error!'"
+                    x-on:click="showDialog"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <dialog id="llm_test_dialog">
+            <div class="notification"
+                 x-bind:class="llm_test_result === 'ok' ? 'is-success' : 'is-danger'"
+                 x-html="llm_test_result === 'ok' ? 'Your API key and chosen model worked!' : llm_test_result">
+            </div>
+          </dialog>
+  
+        </form>
+  
+        {% endif %}{# end if class['link_ident'] -- i.e., end of user-created class config #}
+  
+      </div>
+  
+      {% if extra_sections %}
+      <div class="conf_col_sep"></div>
+      <div class="conf_col">
+        {% for extra_section in extra_sections %}
+          {{ extra_section }}
+          {% if not loop.last %}
+            <div class="conf_col_sep mt-5 mb-5"></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+  
+  </section>
+  
+  {% endblock %}

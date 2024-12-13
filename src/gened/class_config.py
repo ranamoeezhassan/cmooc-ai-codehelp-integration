@@ -14,7 +14,8 @@ from flask import (
 
 from .auth import get_auth, instructor_required
 from .db import get_db
-from .openai import LLMConfig, get_completion, get_models, with_llm
+# from .openai import LLMConfig, get_completion, get_models, with_llm
+from .dartmouth import LLMConfig, get_completion, get_models, with_llm
 from .tz import date_is_past
 
 bp = Blueprint('class_config', __name__, url_prefix="/instructor/config", template_folder='templates')
@@ -46,7 +47,7 @@ def config_form() -> str:
     class_id = auth['class_id']
 
     class_row = db.execute("""
-        SELECT classes.id, classes.enabled, classes_user.link_ident, classes_user.link_reg_expires, classes_user.openai_key, classes_user.model_id
+        SELECT classes.id, classes.enabled, classes_user.link_ident, classes_user.link_reg_expires, classes_user.dartmouth_key, classes_user.model_id
         FROM classes
         LEFT JOIN classes_user
           ON classes.id = classes_user.class_id
