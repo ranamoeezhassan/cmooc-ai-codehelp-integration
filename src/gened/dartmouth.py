@@ -49,25 +49,60 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
 
     # Similar class/token logic as original but for Dartmouth API
     if auth['class_id']:
+        # class_row = db.execute("""
+        #     SELECT
+        #         classes.enabled,
+        #         COALESCE(consumers.dartmouth_key, classes_user.dartmouth_key) AS dartmouth_key,
+        #         COALESCE(consumers.model_id, classes_user.model_id) AS _model_id,
+        #         models.model
+        #     FROM classes
+        #     LEFT JOIN classes_lti ON classes.id = classes_lti.class_id
+        #     LEFT JOIN consumers ON classes_lti.lti_consumer_id = consumers.id 
+        #     LEFT JOIN classes_user ON classes.id = classes_user.class_id
+        #     LEFT JOIN models ON models.id = _model_id
+        #     WHERE classes.id = ?
+        # """, [auth['class_id']]).fetchone()
+
         class_row = db.execute("""
-            SELECT
+            SELECT 
                 classes.enabled,
+                classes.max_queries,
+                users.queries_used,
                 COALESCE(consumers.dartmouth_key, classes_user.dartmouth_key) AS dartmouth_key,
                 COALESCE(consumers.model_id, classes_user.model_id) AS _model_id,
-                models.model
+                models.model,
+                roles.role
             FROM classes
             LEFT JOIN classes_lti ON classes.id = classes_lti.class_id
             LEFT JOIN consumers ON classes_lti.lti_consumer_id = consumers.id 
             LEFT JOIN classes_user ON classes.id = classes_user.class_id
             LEFT JOIN models ON models.id = _model_id
+            LEFT JOIN roles ON roles.class_id = classes.id AND roles.user_id = ?
+            LEFT JOIN users ON users.id = ?
             WHERE classes.id = ?
-        """, [auth['class_id']]).fetchone()
+        """, [auth['user_id'], auth['user_id'], auth['class_id']]).fetchone()
+
 
         if not class_row['enabled']:
             raise ClassDisabledError
 
         if not class_row['dartmouth_key']:
             raise NoKeyFoundError
+        
+        if class_row['role'] == 'student':
+            if class_row['queries_used'] >= class_row['max_queries']:
+                raise NoTokensError(
+                    f"You have reached the maximum limit of {class_row['max_queries']} queries. "
+                    "Please contact your instructor."
+                )
+            
+            # Increment query count if spending a token
+            if spend_token:
+                db.execute(
+                    "UPDATE users SET queries_used = queries_used + 1 WHERE id = ?",
+                    [auth['user_id']]
+                )
+                db.commit()
 
         return LLMConfig(
             api_key=class_row['dartmouth_key'],

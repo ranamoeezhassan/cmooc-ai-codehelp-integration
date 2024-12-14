@@ -221,8 +221,43 @@
           </dialog>
   
         </form>
-  
         {% endif %}{# end if class['link_ident'] -- i.e., end of user-created class config #}
+
+        <div class="conf_col_sep mt-5"></div>
+
+        <h2 class="title is-size-4 mt-5">Query Limits</h2>
+        <form action="{{ url_for('instructor.set_user_class_setting') }}" method="post">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Query Limit Settings:</label>
+              <p class="help-text">Configure maximum queries allowed per student</p>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <input class="input" type="number" 
+                        name="max_queries" 
+                        value="{{ class_row.max_queries }}"
+                        min="1" max="1000">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field is-horizontal">
+            <div class="field-body">
+              <div class="field is-grouped">
+                <div class="control">
+                  <button class="button is-link" type="submit" name="save_query_limits">Save Limits</button>
+                </div>
+                <div class="control">
+                  <button class="button is-warning" type="submit" name="reset_query_counts">Reset All Query Counts</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+  
   
       </div>
   

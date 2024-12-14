@@ -34,6 +34,12 @@ SPDX-License-Identifier: AGPL-3.0-only
       {% include "free_query_dialog.html" %}
       {% endif %}
 
+      {% if auth['role'] == 'student' %}
+      <div class="notification">
+          Queries used: {{ queries_used }} / {{ max_queries }}
+      </div>
+      {% endif %}
+
       {% if contexts %}
       <div class="field is-horizontal">
         <div class="field-label is-normal">

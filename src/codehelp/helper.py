@@ -53,6 +53,21 @@ def help_form(llm: LLMConfig, query_id: int | None = None, class_id: int | None 
     db = get_db()
     auth = get_auth()
 
+    if auth['role'] == 'student':
+        usage_row = db.execute("""
+            SELECT users.queries_used, classes.max_queries
+            FROM users 
+            JOIN roles ON users.id = roles.user_id
+            JOIN classes ON roles.class_id = classes.id
+            WHERE users.id = ? AND classes.id = ?
+        """, [auth['user_id'], auth['class_id']]).fetchone()
+        
+        queries_used = usage_row['queries_used']
+        max_queries = usage_row['max_queries']
+    else:
+        queries_used = None
+        max_queries = None
+
     if class_id is not None:
         success = switch_class(class_id)
         if not success:
@@ -102,7 +117,7 @@ def help_form(llm: LLMConfig, query_id: int | None = None, class_id: int | None 
 
     history = get_history()
 
-    return render_template("help_form.html", llm=llm, query=query_row, history=history, contexts=contexts, selected_context_name=selected_context_name)
+    return render_template("help_form.html", queries_used=queries_used, max_queries=max_queries, llm=llm, query=query_row, history=history, contexts=contexts, selected_context_name=selected_context_name)
 
 
 @bp.route("/view/<int:query_id>")

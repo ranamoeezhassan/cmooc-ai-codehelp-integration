@@ -12,12 +12,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 {% endblock %}
 
 {% block body %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <section class="section p-5">
   <h1 class="title">{{ auth['class_name'] }}</h1>
   <div class="tbl_cols">
-    <div class="tbl_col" style="width: 35em;">
+    <div class="tbl_col" style="width: 50em;">
       <h2 class="is-size-3">Users</h2>
-      {{ datatable(
+      <!-- {{ datatable(
            'users',
            [
              ('id', 'id'),
@@ -33,9 +34,55 @@ SPDX-License-Identifier: AGPL-3.0-only
            link_template="?user=${value}",
            csv_link=url_for("instructor.get_csv", kind="users")
          )
+      }} -->
+      {{ datatable(
+        'users',
+        [
+          ('id', 'id'),
+          ('user', 'display_name'),
+          ('#queries', 'num_queries', 'r'),
+          ('1wk', 'num_recent_queries', 'r'),
+          ('dartmouth #queries', 'queries_used', 'r'),
+          ('reset dartmouth #queries', 'reset_button', 'h'),
+          ('max queries', 'max_queries', 'r'),
+          ('active?', 'active', 'b', 'instructor.set_role_active'),
+          ('instructor?', 'instructor_role', 'b', 'instructor.set_role_instructor')
+        ],
+        users,
+        hidden_cols=['id'],
+        link_col=0,
+        link_template="?user=${value}",
+        csv_link=url_for("instructor.get_csv", kind="users")
+      )
       }}
       <p><em>Users that are not active will not be able to access this class.</em></p>
-    </div>
+
+      <!-- <h2 class="is-size-3">Reset Individual Student Queries</h2>
+        {% for user in users %}
+          {% if user.role == 'student' %}
+            <div class="field has-addons mt-2">
+              <div class="control">
+                <span>
+                  {{user.display_name}}
+                </span>
+                <span class="tag {% if user.queries_used >= user.max_queries %}is-danger{% else %}is-info{% endif %}">
+                  {{ user.queries_used }} / {{ user.max_queries }}
+                </span>
+              </div>
+              <div class="control">
+                <button class="button is-small" 
+                        onclick="resetStudentQueries('{{ user.id }}', '{{ user.display_name }}')"
+                        title="Reset query count {user.display_name}">
+                  <span class="icon">
+                    <i class="fas fa-redo"></i>
+                  </span>
+                  <span>Reset</span>
+                </button>
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+    </div> -->
     <div class="tbl_col" style="width: 75em; flex-grow: 1;">
       <h2 class="is-size-3">
         Queries
@@ -50,5 +97,27 @@ SPDX-License-Identifier: AGPL-3.0-only
       {% endblock %}
     </div>
   </div>
+
+  <!-- Add this JavaScript -->
+  <script>
+  function resetStudentQueries(studentId, studentName) {
+      if (confirm(`Reset query count for ${studentName}?`)) {
+          fetch(`/instructor/reset_student_queries/${studentId}`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+          })
+          .then(response => response.json())
+          .then(data => {
+              if (data.status === 'success') {
+                  window.location.reload();  // Refresh to show updated counts
+              } else {
+                  alert('Error resetting query count');
+              }
+          });
+      }
+  }
+  </script>
 </section>
 {% endblock %}
