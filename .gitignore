@@ -19,3 +19,11 @@ venv/
 cmoocenv
 
 .DS_Store
+
+# SSL/TLS Certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.cert
+ssl/

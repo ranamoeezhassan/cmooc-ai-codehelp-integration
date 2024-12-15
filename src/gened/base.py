@@ -149,7 +149,7 @@ def create_app_base(import_name: str, app_config: dict[str, Any], instance_path:
         try:
             env_var = os.environ[varname]
             base_config[varname] = env_var
-            print(f'Loaded in environment variable = {env_var}')
+            # print(f'Loaded in environment variable = {env_var}')
         except KeyError:
             app.logger.error(f"{varname} environment variable not set.")
             sys.exit(1)

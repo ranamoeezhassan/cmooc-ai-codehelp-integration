@@ -5,6 +5,7 @@ from functools import wraps
 from sqlite3 import Row
 from typing import ParamSpec, TypeVar
 import jwt
+import requests
 from datetime import datetime, timezone
 from flask import current_app, flash, render_template
 
@@ -155,8 +156,6 @@ def with_llm(*, use_system_key: bool = False, spend_token: bool = False) -> Call
     return decorator
 
 async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], str]:
-    from dartmouth.connectRawAPI import sendInstructions, generateInstructions, isTokenExpired
-    
     try:
         # Get/refresh JWT token
         if not hasattr(llm, '_token') or not llm._token or isTokenExpired(llm._token, False):
@@ -164,6 +163,8 @@ async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], s
             if resp.status_code != 200:
                 return {'error': 'JWT token error'}, f"Error getting JWT token: {resp.text}"
             llm._token = resp.json()["jwt"]
+        # else:
+        #     print("Already have unexpired token")
 
         # Generate API request 
         prompt, parameters = generateInstructions(prompt, None)
@@ -190,3 +191,56 @@ def get_models() -> list[Row]:
     db = get_db()
     models = db.execute("SELECT * FROM models WHERE active ORDER BY id ASC").fetchall()
     return models
+
+
+def isTokenExpired(token, verbose):
+    # Decode the JWT without verification to check the payload
+    decoded = jwt.decode(token, options={"verify_signature": False})
+    exp_timestamp = decoded["exp"] 
+    exp_time = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
+
+    if (verbose):
+        print(f"Decoded JWT: {decoded}")
+        print(f"Expiration Time: {exp_time}")
+        print(f"Duration JWT is Valid: {(exp_time - datetime.now(timezone.utc)).total_seconds()/3600:.4f} hours")
+        print(f"Is token expired? {exp_time < datetime.now(timezone.utc)}\n\n")
+    
+    return exp_time < datetime.now(timezone.utc)
+
+def generateInstructions(prompt, parameters):
+    prompt = f"<s> [INST] {prompt} [/INST]"
+    if parameters == None:
+        parameters = {
+        "max_new_tokens": 500,
+        "return_full_text": False,
+        }
+
+    return prompt, parameters
+    
+def sendInstructions(apiURL, key, token, prompt, parameters):
+    if (prompt == None and parameters == None):
+        response = requests.post(
+            apiURL,
+            headers={"Authorization": key}
+        )
+    else:
+        response = requests.post(
+            apiURL,
+            headers= {"accept": "application/json",
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json"},
+            json= {"inputs": prompt,
+                   "parameters": parameters}
+        )
+
+    if response.status_code != 200:
+        print(f"Error: {response.status_code} : {response.text}")
+        exit()
+    else:
+        try:
+            json_response = response.json()
+            # print(f'Response from the model (JSON): {json_response}\n\n')
+            return response
+        except requests.exceptions.JSONDecodeError as e:
+            print(f"Failed to decode JSON response: {str(e)}")
+            print("Response content:", response.content)
