@@ -104,7 +104,7 @@ ${ options.searchable ?
       {% for row in data %}
         <tr>
           {% for col in columns %}
-            <td>
+          <td>
             {%- if 'time' in col[1] -%}
               {{ row[col[1]] | localtime }}
             {%- elif col[1] == 'display_name' -%}
@@ -113,6 +113,8 @@ ${ options.searchable ?
               {{ row[col[1]] | fmt_response_txt }}
             {%- elif col | length > 2 and col[2] == 'b' -%}
               <input type="checkbox" {{ 'checked' if row[col[1]] else '' }} onclick="set_bool_{{col[1]}}({{row.role_id}}, this.checked)">
+            {%- elif col | length > 2 and col[2] == 'h' -%}
+              {{ row[col[1]] | safe }}
             {%- else -%}
               {{ row[col[1]] | tbl_cell }}
             {%- endif -%}

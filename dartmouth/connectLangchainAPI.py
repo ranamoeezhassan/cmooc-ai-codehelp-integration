@@ -28,7 +28,7 @@ def main():
     print("=================================================================")
 
     betterResponse2 = llm.invoke("<s> [INST] What are pointers in C? [/INST]")
-    print(f"BETTER RESPONSE 2:\n {betterResponse}\n")
+    print(f"BETTER RESPONSE 2:\n {betterResponse2}\n")
     print("=================================================================")
 
 if __name__ == "__main__":

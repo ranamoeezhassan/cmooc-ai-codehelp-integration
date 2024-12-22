@@ -27,7 +27,8 @@ from gened.auth import (
 )
 from gened.classes import switch_class
 from gened.db import get_db
-from gened.openai import LLMConfig, get_completion, with_llm
+# from gened.openai import LLMConfig, get_completion, with_llm
+from gened.dartmouth import LLMConfig, get_completion, with_llm
 from gened.queries import get_history, get_query
 from gened.testing.mocks import mock_async_completion
 
@@ -51,6 +52,21 @@ bp = Blueprint('helper', __name__, url_prefix="/help", template_folder='template
 def help_form(llm: LLMConfig, query_id: int | None = None, class_id: int | None = None, ctx_name: str | None = None) -> str | Response:
     db = get_db()
     auth = get_auth()
+
+    if auth['role'] == 'student':
+        usage_row = db.execute("""
+            SELECT users.queries_used, classes.max_queries
+            FROM users 
+            JOIN roles ON users.id = roles.user_id
+            JOIN classes ON roles.class_id = classes.id
+            WHERE users.id = ? AND classes.id = ?
+        """, [auth['user_id'], auth['class_id']]).fetchone()
+        
+        queries_used = usage_row['queries_used']
+        max_queries = usage_row['max_queries']
+    else:
+        queries_used = None
+        max_queries = None
 
     if class_id is not None:
         success = switch_class(class_id)
@@ -101,7 +117,7 @@ def help_form(llm: LLMConfig, query_id: int | None = None, class_id: int | None 
 
     history = get_history()
 
-    return render_template("help_form.html", llm=llm, query=query_row, history=history, contexts=contexts, selected_context_name=selected_context_name)
+    return render_template("help_form.html", queries_used=queries_used, max_queries=max_queries, llm=llm, query=query_row, history=history, contexts=contexts, selected_context_name=selected_context_name)
 
 
 @bp.route("/view/<int:query_id>")
@@ -121,50 +137,103 @@ def help_view(query_id: int) -> str | Response:
     return render_template("help_view.html", query=query_row, responses=responses, history=history, topics=topics)
 
 
+# async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code: str, error: str, issue: str) -> tuple[list[dict[str, str]], dict[str, str]]:
+#     ''' Run the given query against the coding help system of prompts.
+
+#     Returns a tuple containing:
+#       1) A list of response objects from the OpenAI completion (to be stored in the database)
+#       2) A dictionary of response text, potentially including keys 'insufficient' and 'main'.
+#     '''
+#     client = llm.client
+#     model = llm.model
+
+#     context_str = context.prompt_str() if context is not None else None
+
+#     # Launch the "sufficient detail" check concurrently with the main prompt to save time
+#     task_main = asyncio.create_task(
+#         get_completion(
+#             client,
+#             model=model,
+#             messages=prompts.make_main_prompt(code, error, issue, context_str),
+#         )
+#     )
+#     task_sufficient = asyncio.create_task(
+#         get_completion(
+#             client,
+#             model=model,
+#             messages=prompts.make_sufficient_prompt(code, error, issue, context_str),
+#         )
+#     )
+
+#     # Store all responses received
+#     responses = []
+
+#     # Let's get the main response.
+#     response_main, response_txt = await task_main
+#     responses.append(response_main)
+
+#     if "```" in response_txt or "should look like" in response_txt or "should look something like" in response_txt:
+#         # That's probably too much code.  Let's clean it up...
+#         cleanup_prompt = prompts.make_cleanup_prompt(response_text=response_txt)
+#         cleanup_response, cleanup_response_txt = await get_completion(client, model, prompt=cleanup_prompt)
+#         responses.append(cleanup_response)
+#         response_txt = cleanup_response_txt
+
+#     # Check whether there is sufficient information
+#     # Checking after processing main+cleanup prevents this from holding up the start of cleanup if this was slow
+#     response_sufficient, response_sufficient_txt = await task_sufficient
+#     responses.append(response_sufficient)
+
+#     if 'error' in response_main:
+#         return responses, {'error': response_txt}
+#     elif response_sufficient_txt.endswith("OK") or "OK." in response_sufficient_txt or "```" in response_sufficient_txt or "is sufficient for me" in response_sufficient_txt or response_sufficient_txt.startswith("Error ("):
+#         # We're using just the main response.
+#         return responses, {'main': response_txt}
+#     else:
+#         # Give them the request for more information plus the main response, in case it's helpful.
+#         return responses, {'insufficient': response_sufficient_txt, 'main': response_txt
+
 async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code: str, error: str, issue: str) -> tuple[list[dict[str, str]], dict[str, str]]:
-    ''' Run the given query against the coding help system of prompts.
+    ''' Run the given query against the coding help system of prompts using Dartmouth API.
 
     Returns a tuple containing:
-      1) A list of response objects from the OpenAI completion (to be stored in the database)
+      1) A list of response objects from the Dartmouth completion (to be stored in the database)
       2) A dictionary of response text, potentially including keys 'insufficient' and 'main'.
     '''
-    client = llm.client
-    model = llm.model
-
     context_str = context.prompt_str() if context is not None else None
 
-    # Launch the "sufficient detail" check concurrently with the main prompt to save time
+    # Launch the "sufficient detail" check concurrently with the main prompt
     task_main = asyncio.create_task(
         get_completion(
-            client,
-            model=model,
-            messages=prompts.make_main_prompt(code, error, issue, context_str),
+            llm,  # Pass whole llm config instead of client
+            prompts.make_main_prompt(code, error, issue, context_str),
         )
     )
     task_sufficient = asyncio.create_task(
         get_completion(
-            client,
-            model=model,
-            messages=prompts.make_sufficient_prompt(code, error, issue, context_str),
+            llm,  # Pass whole llm config instead of client
+            prompts.make_sufficient_prompt(code, error, issue, context_str),
         )
     )
 
     # Store all responses received
     responses = []
 
-    # Let's get the main response.
+    # Let's get the main response
     response_main, response_txt = await task_main
     responses.append(response_main)
 
     if "```" in response_txt or "should look like" in response_txt or "should look something like" in response_txt:
-        # That's probably too much code.  Let's clean it up...
+        # That's probably too much code. Let's clean it up...
         cleanup_prompt = prompts.make_cleanup_prompt(response_text=response_txt)
-        cleanup_response, cleanup_response_txt = await get_completion(client, model, prompt=cleanup_prompt)
+        cleanup_response, cleanup_response_txt = await get_completion(
+            llm,  # Pass whole llm config
+            cleanup_prompt
+        )
         responses.append(cleanup_response)
         response_txt = cleanup_response_txt
 
     # Check whether there is sufficient information
-    # Checking after processing main+cleanup prevents this from holding up the start of cleanup if this was slow
     response_sufficient, response_sufficient_txt = await task_sufficient
     responses.append(response_sufficient)
 
@@ -174,9 +243,8 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code:
         # We're using just the main response.
         return responses, {'main': response_txt}
     else:
-        # Give them the request for more information plus the main response, in case it's helpful.
+        # Give them the request for more information plus the main response
         return responses, {'insufficient': response_sufficient_txt, 'main': response_txt}
-
 
 def run_query(llm: LLMConfig, context: ContextConfig | None, code: str, error: str, issue: str) -> int:
     query_id = record_query(context, code, error, issue)
