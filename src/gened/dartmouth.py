@@ -30,9 +30,10 @@ class LLMConfig:
     model: str
     tokens_remaining: int | None = None
     _token: str | None = None
-
-def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
+    
+def _get_llm(*, use_system_key: bool = False, spend_token: bool = False) -> LLMConfig:
     db = get_db()
+    auth = get_auth()
     
     def make_system_client(tokens_remaining: int | None = None) -> LLMConfig:
         system_model = current_app.config["DEFAULT_MODEL"]
@@ -46,24 +47,8 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
     if use_system_key:
         return make_system_client()
 
-    auth = get_auth()
-
-    # Similar class/token logic as original but for Dartmouth API
+    # Get class data, if there is an active class
     if auth['class_id']:
-        # class_row = db.execute("""
-        #     SELECT
-        #         classes.enabled,
-        #         COALESCE(consumers.dartmouth_key, classes_user.dartmouth_key) AS dartmouth_key,
-        #         COALESCE(consumers.model_id, classes_user.model_id) AS _model_id,
-        #         models.model
-        #     FROM classes
-        #     LEFT JOIN classes_lti ON classes.id = classes_lti.class_id
-        #     LEFT JOIN consumers ON classes_lti.lti_consumer_id = consumers.id 
-        #     LEFT JOIN classes_user ON classes.id = classes_user.class_id
-        #     LEFT JOIN models ON models.id = _model_id
-        #     WHERE classes.id = ?
-        # """, [auth['class_id']]).fetchone()
-
         class_row = db.execute("""
             SELECT 
                 classes.enabled,
@@ -82,7 +67,6 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
             LEFT JOIN users ON users.id = ?
             WHERE classes.id = ?
         """, [auth['user_id'], auth['user_id'], auth['class_id']]).fetchone()
-
 
         if not class_row['enabled']:
             raise ClassDisabledError
@@ -110,12 +94,19 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
             model=class_row['model']
         )
 
-    # Rest of token management same as original
+    # Get user data for tokens, auth_provider
     user_row = db.execute("""
-        SELECT users.query_tokens, auth_providers.name AS auth_provider_name
-        FROM users JOIN auth_providers ON users.auth_provider = auth_providers.id 
+        SELECT
+            users.query_tokens,
+            auth_providers.name AS auth_provider_name
+        FROM users
+        JOIN auth_providers
+          ON users.auth_provider = auth_providers.id
         WHERE users.id = ?
     """, [auth['user_id']]).fetchone()
+
+    if user_row is None:
+        raise ValueError("User not found")
 
     if user_row['auth_provider_name'] == "local":
         return make_system_client()
@@ -211,7 +202,7 @@ def generateInstructions(prompt, parameters):
     prompt = f"<s> [INST] {prompt} [/INST]"
     if parameters == None:
         parameters = {
-        "max_new_tokens": 500,
+        "max_new_tokens": 1000,
         "return_full_text": False,
         }
 
@@ -239,7 +230,7 @@ def sendInstructions(apiURL, key, token, prompt, parameters):
     else:
         try:
             json_response = response.json()
-            # print(f'Response from the model (JSON): {json_response}\n\n')
+            print(f'Response from the model (JSON): {json_response}\n\n')
             return response
         except requests.exceptions.JSONDecodeError as e:
             print(f"Failed to decode JSON response: {str(e)}")
