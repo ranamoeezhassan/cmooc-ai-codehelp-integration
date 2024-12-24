@@ -9,7 +9,7 @@ from werkzeug.wrappers.response import Response
 
 from gened.db import get_db
 from .helper import run_query, get_query
-from .context import get_context_by_name
+from .context import get_context_by_name, record_context_string
 from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
 from .context import get_context_by_name, ContextConfig, get_available_contexts
@@ -79,6 +79,8 @@ def submit_query(llm: LLMConfig):
     code = data.get("code", "")
     error = data.get("error", "")
     issue = data.get("issue", "")
+    if (code == None or error == None or issue == None):
+        return jsonify({"error": f"Code, Error or Issue parameters cant be none (use empty string)"}), 401
 
     # Run query and get response
     query_id = run_query(llm, context, code, error, issue)
