@@ -70,6 +70,17 @@ def set_session_auth_user(user_id: int) -> None:
     _invalidate_g_auth()
 
 
+# def set_session_auth_class(class_id: int | None) -> None:
+#     """ Set the current session's active class (on login or class switch).
+#         Adds to any existing auth data in the session.
+#     """
+#     sess_auth = session.get(AUTH_SESSION_KEY, {})
+#     assert 'user_id' in sess_auth
+#     assert sess_auth['user_id'] is not None  # must be logged in already for this function to be valid
+#     sess_auth['class_id'] = class_id
+#     session[AUTH_SESSION_KEY] = sess_auth
+#     _invalidate_g_auth()
+
 def set_session_auth_class(class_id: int | None) -> None:
     """ Set the current session's active class (on login or class switch).
         Adds to any existing auth data in the session.
@@ -77,10 +88,148 @@ def set_session_auth_class(class_id: int | None) -> None:
     sess_auth = session.get(AUTH_SESSION_KEY, {})
     assert 'user_id' in sess_auth
     assert sess_auth['user_id'] is not None  # must be logged in already for this function to be valid
-    sess_auth['class_id'] = class_id
+
+    if class_id is not None:
+        db = get_db()
+        class_row = db.execute("""
+            SELECT classes.id AS class_id, classes.name AS class_name, roles.id AS role_id, roles.role
+            FROM classes
+            JOIN roles ON classes.id = roles.class_id
+            WHERE classes.id = ? AND roles.user_id = ? AND roles.active = 1
+        """, [class_id, sess_auth['user_id']]).fetchone()
+
+        if class_row:
+            sess_auth['class_id'] = class_row['class_id']
+            sess_auth['class_name'] = class_row['class_name']
+            sess_auth['role_id'] = class_row['role_id']
+            sess_auth['role'] = class_row['role']
+        else:
+            sess_auth['class_id'] = None
+            sess_auth['class_name'] = None
+            sess_auth['role_id'] = None
+            sess_auth['role'] = None
+    else:
+        sess_auth['class_id'] = None
+        sess_auth['class_name'] = None
+        sess_auth['role_id'] = None
+        sess_auth['role'] = None
+
     session[AUTH_SESSION_KEY] = sess_auth
     _invalidate_g_auth()
 
+
+# def _get_auth_from_session() -> AuthDict:
+#     """Populate auth data for the current session based on its current
+#     user_id and role_id (if any), or from token if using API auth.
+#     """
+#     base: AuthDict = {
+#         'user_id': None,
+#         'is_admin': False,
+#         'is_tester': False,
+#         'role': None,
+#         'class_id': None,  # Ensure class_id is always present
+#         'class_name': None,
+#         'class_experiments': [],
+#         'role_id': None,
+#         'other_classes': [],
+#     }
+
+#     # Check for API token first
+#     auth_header = request.headers.get('Authorization')
+#     if auth_header and auth_header.startswith('Bearer '):
+#         token = auth_header.split(' ')[1]
+#         # print("we are here with token", token )
+#         try:
+#             # Decode token to get user_id
+#             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+#             user_id = data['user_id']
+#         except:
+#             return base
+#     else:
+#         # Regular session-based auth
+#         sess_auth = session.get(AUTH_SESSION_KEY, {})
+#         user_id = sess_auth.get('user_id', None)
+
+#     if not user_id:
+#         return base
+
+#     db = get_db()
+
+#     # Get user's data
+#     user_row = db.execute("""
+#         SELECT
+#             users.id,
+#             users.display_name,
+#             users.is_admin,
+#             users.is_tester,
+#             auth_providers.name AS auth_provider
+#         FROM users
+#         LEFT JOIN auth_providers ON auth_providers.id=users.auth_provider
+#         WHERE users.id=?
+#     """, [user_id]).fetchone()
+
+#     if not user_row:
+#         return base
+
+#     # Create a new AuthDict and populate with data from the database
+#     auth_dict: AuthDict = {
+#         'user_id': user_id,
+#         'display_name': user_row['display_name'],
+#         'is_admin': user_row['is_admin'],
+#         'is_tester': user_row['is_tester'],
+#         'auth_provider': user_row['auth_provider'],
+#         'class_id': None,
+#         'class_name': None,
+#         'class_experiments': [],
+#         'role_id': None,
+#         'role': None,
+#         'other_classes': [],
+#     }
+
+#     # Retrieve class_id and role from roles table
+#     role_row = db.execute("""
+#         SELECT roles.id as role_id, roles.role, roles.class_id
+#         FROM roles
+#         WHERE roles.user_id = ? AND roles.active = 1
+#         LIMIT 1
+#     """, [user_id]).fetchone()
+
+#     if role_row:
+#         auth_dict['role_id'] = role_row['role_id']
+#         auth_dict['role'] = role_row['role']
+#         auth_dict['class_id'] = role_row['class_id']
+
+#         # If class_id is set, get additional class info
+#         if auth_dict['class_id']:
+#             class_row = db.execute("SELECT name FROM classes WHERE id=?", [auth_dict['class_id']]).fetchone()
+#             if class_row:
+#                 auth_dict['class_name'] = class_row['name']
+#                 # Get experiments for this class
+#                 experiment_rows = db.execute("""
+#                     SELECT experiments.name 
+#                     FROM experiments 
+#                     JOIN experiment_class ON experiment_class.experiment_id=experiments.id 
+#                     WHERE experiment_class.class_id=?
+#                 """, [auth_dict['class_id']]).fetchall()
+#                 auth_dict['class_experiments'] = [row['name'] for row in experiment_rows]
+
+#     # Admin gets instructor role automatically
+#     if auth_dict['is_admin']:
+#         auth_dict['role'] = 'instructor'
+
+#     return auth_dict
+
+# def get_auth() -> AuthDict:
+#     if 'auth' not in g:
+#         g.auth = _get_auth_from_session()
+
+#     return g.auth  # type: ignore[no-any-return]
+
+def get_auth() -> AuthDict:
+    if 'auth' not in g:
+        g.auth = _get_auth_from_session()
+
+    return g.auth  # type: ignore[no-any-return]
 
 def _get_auth_from_session() -> AuthDict:
     """Populate auth data for the current session based on its current
@@ -98,21 +247,8 @@ def _get_auth_from_session() -> AuthDict:
         'other_classes': [],
     }
 
-    # Check for API token first
-    auth_header = request.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-        # print("we are here with token", token )
-        try:
-            # Decode token to get user_id
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
-            user_id = data['user_id']
-        except:
-            return base
-    else:
-        # Regular session-based auth
-        sess_auth = session.get(AUTH_SESSION_KEY, {})
-        user_id = sess_auth.get('user_id', None)
+    sess_auth = session.get(AUTH_SESSION_KEY, {})
+    user_id = sess_auth.get('user_id', None)
 
     if not user_id:
         return base
@@ -142,53 +278,29 @@ def _get_auth_from_session() -> AuthDict:
         'is_admin': user_row['is_admin'],
         'is_tester': user_row['is_tester'],
         'auth_provider': user_row['auth_provider'],
-        'class_id': None,
-        'class_name': None,
+        'class_id': sess_auth.get('class_id', None),
+        'class_name': sess_auth.get('class_name', None),
+        'role_id': sess_auth.get('role_id', None),
+        'role': sess_auth.get('role', None),
         'class_experiments': [],
-        'role_id': None,
-        'role': None,
         'other_classes': [],
     }
 
-    # Retrieve class_id and role from roles table
-    role_row = db.execute("""
-        SELECT roles.id as role_id, roles.role, roles.class_id
-        FROM roles
-        WHERE roles.user_id = ? AND roles.active = 1
-        LIMIT 1
-    """, [user_id]).fetchone()
-
-    if role_row:
-        auth_dict['role_id'] = role_row['role_id']
-        auth_dict['role'] = role_row['role']
-        auth_dict['class_id'] = role_row['class_id']
-
-        # If class_id is set, get additional class info
-        if auth_dict['class_id']:
-            class_row = db.execute("SELECT name FROM classes WHERE id=?", [auth_dict['class_id']]).fetchone()
-            if class_row:
-                auth_dict['class_name'] = class_row['name']
-                # Get experiments for this class
-                experiment_rows = db.execute("""
-                    SELECT experiments.name 
-                    FROM experiments 
-                    JOIN experiment_class ON experiment_class.experiment_id=experiments.id 
-                    WHERE experiment_class.class_id=?
-                """, [auth_dict['class_id']]).fetchall()
-                auth_dict['class_experiments'] = [row['name'] for row in experiment_rows]
+    # Get experiments for the current class
+    if auth_dict['class_id']:
+        experiment_rows = db.execute("""
+            SELECT experiments.name 
+            FROM experiments 
+            JOIN experiment_class ON experiment_class.experiment_id=experiments.id 
+            WHERE experiment_class.class_id=?
+        """, [auth_dict['class_id']]).fetchall()
+        auth_dict['class_experiments'] = [row['name'] for row in experiment_rows]
 
     # Admin gets instructor role automatically
     if auth_dict['is_admin']:
         auth_dict['role'] = 'instructor'
 
     return auth_dict
-
-def get_auth() -> AuthDict:
-    if 'auth' not in g:
-        g.auth = _get_auth_from_session()
-
-    return g.auth  # type: ignore[no-any-return]
-
 
 def get_last_class(user_id: int) -> int | None:
     """ Find and return the last class (as a class ID) for the given user,

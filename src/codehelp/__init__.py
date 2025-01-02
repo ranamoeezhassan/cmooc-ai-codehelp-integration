@@ -14,6 +14,7 @@ from . import admin, context_config, helper, tutor
 import os
 from dotenv import find_dotenv, load_dotenv
 from . import api
+from .commands import register_commands
 
 def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | None = None) -> Flask:
     app_config = dict(
@@ -22,6 +23,7 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
         SECRET_KEY=os.environ.get('SECRET_KEY'),
         APPLICATION_AUTHOR='Mark Liffiton, Modified by Rana Moeez Hassan',
         SYSTEM_MODEL=os.environ.get('SYSTEM_MODEL'),
+        DEFAULT_CLASS_MODEL_SHORTNAME=os.environ.get('DEFAULT_CLASS_MODEL_SHORTNAME'),
         DATABASE_NAME='codehelp.db',
         HELP_LINK_TEXT='Get Help',
         SUPPORT_EMAIL='rana.moeez.hassan.ug@dartmouth.edu',
@@ -49,5 +51,6 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
     admin.register_with_gened()
 
     app.config['NAVBAR_ITEM_TEMPLATES'].append("tutor_nav_item.html")
+    register_commands(app)
     
     return app

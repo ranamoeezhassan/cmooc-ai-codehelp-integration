@@ -61,13 +61,13 @@ Set Up an Application
    - `FLASK_INSTANCE_PATH`: Path to an instance folder for storing the DB,
      etc.  Commonly set to `instance` (Requires the folder to be already created).
    - `SECRET_KEY`: A secure random string used to sign session cookies.
-   - `OPENAI_API_KEY`: Your OpenAI API key to be used for queries outside of a
-     class context (e.g. for free queries).
-   - `SYSTEM_MODEL`: Name from the OpenAI API of the model to be used outside
-     of a class context.  `gpt-4o` is a good default.
-   - `DEFAULT_CLASS_MODEL_SHORTNAME`: Name from the application database for
-     the default model to be used in new classes (can be configured after
-     creating the class).  `GPT-4o` is a good default.
+   - `BASE_URL`: The base URL for API requests (e.g., "https://api.dartmouth.edu").
+   - `JWT_URL`: The JWT token generation endpoint (e.g., "https://api.dartmouth.edu/api/jwt").
+   - `DARTMOUTH_API_KEY`: Your Dartmouth API key for authentication.
+   - `SYSTEM_MODEL`: API endpoint path for the default model (e.g., "/api/ai/tgi/codellama-13b-instruct-hf/generate").
+     Full URL will be constructed as (BASE_URL)(SYSTEM_MODEL).
+   - `DEFAULT_CLASS_MODEL_SHORTNAME`: Display name for the default model in new classes.
+     `CodeLlama-13B` is the standard default.
 
 *Optionally*, if you want to allow logins from 3rd party authentication
 providers, set any of the following pairs with IDs/secrets obtained from
@@ -90,7 +90,13 @@ Then, to set up an application (CodeHelp, for example):
 flask --app codehelp initdb
 ```
 
-3. Create at least one admin user:
+3. Apply custom dartmouth database migrations:
+
+```sh
+flask --app codehelp dartmouth-migrations
+```
+
+4. Create at least one admin user:
 
 ```sh
 flask --app codehelp newuser --admin [username]
@@ -103,7 +109,7 @@ To change the password:
 flask --app codehelp setpassword [username]
 ```
 
-4. (Optional) To serve files from `/.well-known` (for domain verification,
+5. (Optional) To serve files from `/.well-known` (for domain verification,
    etc.), place the files in a `.well-known` directory inside the Flask
    instance folder.
 
@@ -122,7 +128,7 @@ flask --app codehelp --debug run
 
 Dartmouth
 -------------
-
+See `DARTMOUTH.md` for details about all the modifications made to the base project and API specifications.
 
 Running Tests
 -------------

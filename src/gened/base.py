@@ -234,8 +234,8 @@ def create_app_base(import_name: str, app_config: dict[str, Any], instance_path:
                 "SELECT 1 FROM models WHERE active AND shortname = ?",
                 [app.config['DEFAULT_CLASS_MODEL_SHORTNAME']]
             ).fetchone()
-            if not default_model_row:
-                app.logger.error(f"Default model shortname '{app.config['DEFAULT_CLASS_MODEL_SHORTNAME']}' not found in active models.")
-                sys.exit(1)
+            # if not default_model_row:
+            #     app.logger.error(f"Default model shortname '{app.config['DEFAULT_CLASS_MODEL_SHORTNAME']}' not found in active models.")
+            #     sys.exit(1)
 
     return app

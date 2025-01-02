@@ -84,7 +84,7 @@ def get_or_create_lti_class(lti_consumer_id: int, lti_context_id: str, class_nam
         return class_id
 
 
-def create_user_class(user_id: int, class_name: str, openai_key: str) -> int:
+def create_user_class(user_id: int, class_name: str, dartmouth_key: str) -> int:
     """
     Create a user class.  Assign the given user an 'instructor' role in it.
 
@@ -94,10 +94,10 @@ def create_user_class(user_id: int, class_name: str, openai_key: str) -> int:
       id of the user creating the course -- will be given the instructor role
     class_name : str
       class name from the user
-    openai_key : str
-      OpenAI key from the user.  This is not strictly required, as a class can
+    dartmouth_key : str
+      dartmouth key from the user.  This is not strictly required, as a class can
       exist with no key assigned, but it is clearer for the user if we require
-      an OpenAI key up front.
+      an dartmouth key up front.
 
     Returns
     -------
@@ -115,15 +115,21 @@ def create_user_class(user_id: int, class_name: str, openai_key: str) -> int:
     cur = db.execute("INSERT INTO classes (name) VALUES (?)", [class_name])
     class_id = cur.lastrowid
     assert class_id is not None
+
     # Get default model ID - we validated at startup that this exists
-    model_id = db.execute(
+    model_id_row = db.execute(
         "SELECT id FROM models WHERE active AND shortname = ?",
         [current_app.config['DEFAULT_CLASS_MODEL_SHORTNAME']]
-    ).fetchone()['id']
+    ).fetchone()
+
+    if model_id_row is None:
+        raise ValueError(f"Default model shortname '{current_app.config['DEFAULT_CLASS_MODEL_SHORTNAME']}' not found in active models.")
+
+    model_id = model_id_row['id']
 
     db.execute(
-        "INSERT INTO classes_user (class_id, creator_user_id, link_ident, openai_key, link_reg_expires, model_id) VALUES (?, ?, ?, ?, ?, ?)",
-        [class_id, user_id, link_ident, openai_key, dt.date.min, model_id]
+        "INSERT INTO classes_user (class_id, creator_user_id, link_ident, dartmouth_key, link_reg_expires, model_id) VALUES (?, ?, ?, ?, ?, ?)",
+        [class_id, user_id, link_ident, dartmouth_key, dt.date.min, model_id]
     )
     db.execute(
         "INSERT INTO roles (user_id, class_id, role) VALUES (?, ?, ?)",
@@ -146,14 +152,14 @@ def switch_class(class_id: int | None) -> bool:
                   False otherwise.
     '''
     auth = get_auth()
+    user_id = auth['user_id']
+    db = get_db()
 
     # admins can access any class, but we don't bother setting last_class_id for them
     if auth['is_admin']:
         set_session_auth_class(class_id)
+        current_app.logger.info(f"Admin switched to class: {class_id}")
         return True
-
-    user_id = auth['user_id']
-    db = get_db()
 
     if class_id:
         # check for a valid role in the new class
@@ -170,26 +176,42 @@ def switch_class(class_id: int | None) -> bool:
 
         if not row:
             # no valid row found; change nothing and return failure
+            current_app.logger.info(f"Failed to switch to class: {class_id} for user: {user_id}")
             return False
 
         # otherwise, we can continue with this class_id
+        set_session_auth_class(class_id)
+        # record as user's latest active class
+        db.execute("UPDATE users SET last_class_id=? WHERE users.id=?", [class_id, user_id])
+        db.commit()
+        current_app.logger.info(f"Switched to class: {class_id} for user: {user_id}")
+        return True
 
-    set_session_auth_class(class_id)
-    # record as user's latest active class
-    db.execute("UPDATE users SET last_class_id=? WHERE users.id=?", [class_id, user_id])
+    # If class_id is None, clear the session and update the user's last_class_id to None
+    set_session_auth_class(None)
+    db.execute("UPDATE users SET last_class_id=NULL WHERE users.id=?", [user_id])
     db.commit()
+    current_app.logger.info(f"Cleared current class for user: {user_id}")
     return True
 
 
 @bp.route("/switch/<int:class_id>")
 def switch_class_handler(class_id: int) -> Response:
-    switch_class(class_id)
+    success = switch_class(class_id)
+    if not success:
+        flash("Failed to switch class.", "error")
+    else:
+        flash(f"Switched to class {class_id}.", "success")
     return safe_redirect_next(default_endpoint="profile.main")
 
 
 @bp.route("/leave/")
 def leave_class_handler() -> Response:
-    switch_class(None)
+    success = switch_class(None)
+    if not success:
+        flash("Failed to leave the class.", "error")
+    else:
+        flash("You have left the class.", "success")
     return redirect(url_for("profile.main"))
 
 
@@ -200,9 +222,9 @@ def create_class() -> Response:
     assert user_id is not None
 
     class_name = request.form['class_name']
-    openai_key = request.form['openai_key']
+    dartmouth_key = request.form['dartmouth_key']
 
-    class_id = create_user_class(user_id, class_name, openai_key)
+    class_id = create_user_class(user_id, class_name, dartmouth_key)
     success = switch_class(class_id)
     assert success
 
