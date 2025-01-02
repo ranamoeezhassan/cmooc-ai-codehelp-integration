@@ -8,9 +8,12 @@ import jwt
 import requests
 from datetime import datetime, timezone
 from flask import current_app, flash, render_template
+from dotenv import find_dotenv, load_dotenv
+import os
 
 from .auth import get_auth
 from .db import get_db
+
 
 class ClassDisabledError(Exception):
     pass
@@ -30,6 +33,17 @@ class LLMConfig:
     model: str
     tokens_remaining: int | None = None
     _token: str | None = None
+
+def getBaseURL():
+    load_dotenv()
+    return os.environ.get("BASE_URL")
+
+def getJWTURL():
+    load_dotenv()
+    return os.environ.get("JWT_URL")
+
+BASE_URL = getBaseURL()
+JWT_URL = getJWTURL()
     
 def _get_llm(*, use_system_key: bool = False, spend_token: bool = False) -> LLMConfig:
     db = get_db()
@@ -150,7 +164,7 @@ async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], s
     try:
         # Get/refresh JWT token
         if not hasattr(llm, '_token') or not llm._token or isTokenExpired(llm._token, False):
-            resp = sendInstructions("https://api.dartmouth.edu/api/jwt", llm.api_key, None, None, None)
+            resp = sendInstructions(JWT_URL, llm.api_key, None, None, None)
             if resp.status_code != 200:
                 return {'error': 'JWT token error'}, f"Error getting JWT token: {resp.text}"
             llm._token = resp.json()["jwt"]
@@ -162,7 +176,7 @@ async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], s
         
         # Get response
         resp = sendInstructions(
-            f"https://api.dartmouth.edu/api/ai/tgi/{llm.model}/generate",
+            f"{BASE_URL}{llm.model}",
             None,
             llm._token,
             prompt,
