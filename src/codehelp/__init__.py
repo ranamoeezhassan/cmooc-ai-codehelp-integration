@@ -21,7 +21,7 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
         DARTMOUTH_API_KEY=os.environ.get('DARTMOUTH_API_KEY'),
         SECRET_KEY=os.environ.get('SECRET_KEY'),
         APPLICATION_AUTHOR='Mark Liffiton, Modified by Rana Moeez Hassan',
-        DEFAULT_MODEL='codellama-13b-instruct-hf',
+        SYSTEM_MODEL=os.environ.get('SYSTEM_MODEL'),
         DATABASE_NAME='codehelp.db',
         HELP_LINK_TEXT='Get Help',
         SUPPORT_EMAIL='rana.moeez.hassan.ug@dartmouth.edu',
@@ -30,6 +30,9 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
         DEFAULT_LANGUAGES=[
             "Conceptual Question",
             "C",
+            "Java",
+            "Python",
+            "C++",
         ]
     )
     if test_config:

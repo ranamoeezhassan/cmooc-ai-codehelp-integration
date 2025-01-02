@@ -50,7 +50,7 @@ def _get_llm(*, use_system_key: bool = False, spend_token: bool = False) -> LLMC
     auth = get_auth()
     
     def make_system_client(tokens_remaining: int | None = None) -> LLMConfig:
-        system_model = current_app.config["DEFAULT_MODEL"]
+        system_model = current_app.config["SYSTEM_MODEL"]
         system_key = current_app.config["DARTMOUTH_API_KEY"]
         return LLMConfig(
             api_key=system_key,
