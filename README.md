@@ -59,7 +59,7 @@ Set Up an Application
    environment variables to configure the application.  See `.env.test` for a
    list of all available variables.  The required variables are:
    - `FLASK_INSTANCE_PATH`: Path to an instance folder for storing the DB,
-     etc.  Commonly set to `instance`.
+     etc.  Commonly set to `instance` (Requires the folder to be already created).
    - `SECRET_KEY`: A secure random string used to sign session cookies.
    - `OPENAI_API_KEY`: Your OpenAI API key to be used for queries outside of a
      class context (e.g. for free queries).
@@ -120,6 +120,9 @@ flask --app codehelp run
 flask --app codehelp --debug run
 ```
 
+Dartmouth
+-------------
+
 
 Running Tests
 -------------
@@ -159,7 +162,7 @@ an application and/or contributing to the project.
 Author
 ------
 
-Gen-Ed and the included applications are by Mark Liffiton.
+Gen-Ed and the included applications are by Mark Liffiton. CodeHelp and Gen-Ed were subsequently modified by Rana Moeez Hassan. The modifications were made to utilize the AI Models API provided by Dartmouth College.
 
 
 Licenses

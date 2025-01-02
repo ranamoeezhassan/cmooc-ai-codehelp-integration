@@ -1,4 +1,5 @@
--- src/gened/migrations/20240307--update_api_keys.sql
+-- src/gened/migrations/20241214--codehelp--update_class_api_keys.sql
+-- Rana Moeez Hassan
 
 PRAGMA foreign_keys = OFF;
 

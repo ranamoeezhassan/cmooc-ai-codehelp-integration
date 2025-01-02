@@ -1,4 +1,5 @@
--- src/gened/migrations/[timestamp]_add_dartmouth_models.sql
+-- src/gened/migrations/20241227--codehelp--add_new_dartmouth_models.sql
+-- Rana Moeez Hassan
 
 PRAGMA foreign_keys = OFF;
 
