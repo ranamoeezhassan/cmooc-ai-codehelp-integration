@@ -52,7 +52,7 @@ pip install -e .
 ```
 
 
-Set Up an Application
+Set Up CodeHelp Application
 ---------------------
 
 1. In the root of the repository, create `.env` and populate it with
@@ -63,7 +63,7 @@ Set Up an Application
    - `SECRET_KEY`: A secure random string used to sign session cookies.
    - `BASE_URL`: The base URL for API requests (e.g., "https://api.dartmouth.edu").
    - `JWT_URL`: The JWT token generation endpoint (e.g., "https://api.dartmouth.edu/api/jwt").
-   - `DARTMOUTH_API_KEY`: Your Dartmouth API key for authentication.
+   - `DARTMOUTH_API_KEY`: Your Dartmouth API key for authentication. This is useful if you do not want to setup classes and just want to be able to make queries directly.
    - `SYSTEM_MODEL`: API endpoint path for the default model (e.g., "/api/ai/tgi/codellama-13b-instruct-hf/generate").
      Full URL will be constructed as (BASE_URL)(SYSTEM_MODEL).
    - `DEFAULT_CLASS_MODEL_SHORTNAME`: Display name for the default model in new classes.
@@ -81,8 +81,6 @@ GITHUB_CLIENT_SECRET=[...]
 MICROSOFT_CLIENT_ID=[...]
 MICROSOFT_CLIENT_SECRET=[...]
 ```
-
-Then, to set up an application (CodeHelp, for example):
 
 2. Initialize database:
 
@@ -126,7 +124,7 @@ flask --app codehelp run
 flask --app codehelp --debug run
 ```
 
-Dartmouth
+Dartmouth API Documentation and Details
 -------------
 See `DARTMOUTH.md` for details about all the modifications made to the base project and API specifications.
 
