@@ -1,91 +1,145 @@
 # Dartmouth API AI Integration for CodeHelp
 
-## Overview
-This document details the integration of Dartmouth College's AI API service with CodeHelp, providing an alternative to OpenAI models for code assistance.
+This document details all the changes that we at Dartmouth have made to the open source CodeHelp application to use it with the Dartmouth API instead of the OpenAI service.
 
 ## Implementation Details
 
-### 1. New Model Configuration
-- Added new Dartmouth models in schema migrations:
-    - CodeLlama 13B Python (`codellama-13b-py`)
-    - Other Dartmouth models configurable via environment variables 
+### 1. Switching from OpenAI to Dartmouth AI
 
-### 2. API Integration
-- Base URL and JWT token endpoint configurable via environment variables:
-    - `BASE_URL`: Base URL for API requests
-    - `JWT_URL`: JWT token generation endpoint
-    - `DARTMOUTH_API_KEY`: API key for authentication
-    - `SYSTEM_MODEL`: Default model endpoint path
+Wrote a new module called `dartmouth.py` located in `src/gened` meant to replace the `openai.py` module. Below are specific details that can be used as a guideline to extend the module or switch the API to another service.
+
+#### \_get_llm()
+
+- Internal function that manages LLM configuration and authentication
+- Handles both system and user-specific API keys
+- Manages token usage and class-based access restrictions
+- Returns LLMConfig with api_key, model, and tokens data
+
+#### with_llm()
+
+- Decorator function for LLM operations
+- Manages error handling for:
+  - Disabled classes
+  - Missing API keys
+  - Exhausted tokens
+- Injects LLM configuration into decorated functions
+
+#### get_completion()
+
+- Handles API communication for text completions
+- Manages JWT token acquisition and refresh
+- Sends prompts to Dartmouth API endpoints
+- Returns tuple of response data and generated text
+
+#### Supporting Functions
+
+- `getBaseURL()`: Retrieves base API URL from environment
+- `getJWTURL()`: Retrieves JWT endpoint URL from environment
+- `isTokenExpired()`: Checks JWT token expiration
+- `generateInstructions()`: Formats prompts for API submission
+- `sendInstructions()`: Handles API request transmission
+
+#### Error Classes
+
+- ClassDisabledError
+- NoKeyFoundError
+- NoTokensError
+- TokenExpiredError
+
+### 2. New Model Configuration
+
+- All models that you plan on using need to be added in the database schema. The only way I figured out how to do that was use the database migrations in order to remove/add api models and write new URLs.
+- Added new Dartmouth models in schema migrations:
+  - CodeLlama 13B: General code and instruction following
+  - CodeLlama 13B Python: Specialized for Python code assistance
+  - Llama 3-1 8B: Smaller alternative model for general queries
+  - LLama 3 8B: Another alternative model for general queries
+  - The default queries are sent to the model configured in the .env file whereas once a user joins a class, the instructor has to set a default model where all the student queries are directed to.
+  - If you wanted to add additional models down the line, you would have to write a new migration file (likely a SQL file) that would add the model to the `models` table.
 
 ### 3. Query Management
+
+- Modified the database to add `queries_used` column in the `users` table that is responsible for making sure that a student does not exceed the allocated query limit to them. The `max_queries` column in the
 - Added per-user query tracking and limits
 - Query counts visible in instructor and admin interfaces
 - Query reset functionality available to instructors
-- Default model configured via `DEFAULT_CLASS_MODEL_SHORTNAME`
+
+### 4. API Integration
+
+#### Authentication System
+
+- JWT-based authentication with 1-hour token expiration
+- Tokens signed using `SECRET_KEY` environment variable
+- Token validation through Authorization header decorator
+- Automatic user_id extraction into Flask context
+
+#### Core API Endpoints
+
+##### Authentication
+
+Authentication is handled through JWT tokens. Users must obtain a valid token to access protected endpoints.
+
+- `POST /api/login`
+  - Validates username/password credentials
+  - Returns JWT access token upon success
+
+##### Query Management
+
+- `POST /api/query` (Protected)
+  - Handles code assistance requests
+  - Supports optional context parameter
+  - Returns query_id and AI responses
+  - Requires valid JWT token
+
+##### Context Management
+
+- `GET /api/contexts` - Lists available contexts
+- `GET /api/context/<name>` - Retrieves specific context
+- `POST /api/context` - Creates new context (instructor only)
+- `DELETE /api/context/<name>` - Removes context (instructor only)
+
+#### Client Library (api_requests.py)
+
+- Authentication helper for JWT token acquisition
+- Query submission and retrieval functions
+- Context management CRUD operations
+- All requests include JWT authentication headers
+- `api_requests.ipynb` serves as an example of how I envision the API service being used.
+
+#### Error Handling
+
+- 403 errors for invalid/missing tokens
+- Authentication failures return appropriate status codes
+- Context management restricted to instructor roles
+
+The API follows RESTful principles with JWT authentication securing all protected endpoints. Context management is primarily handled by instructors through the provided CRUD operations.
 
 ## Setup Requirements
 
+These instructions are specific to the dartmouth api changes that I have made. These build on the "Set Up CodeHelp Application" instructions in the `README.md` so please make sure you follow those instructions before you proceed with these.
+
 1. Environment Configuration:
+
 ```
 DARTMOUTH_API_KEY=<your_api_key>
 BASE_URL=https://api.dartmouth.edu
-JWT_URL=/api/jwt
+JWT_URL=https://api.dartmouth.edu/api/jwt
 SYSTEM_MODEL=/api/ai/tgi/codellama-13b-instruct-hf/generate
 ```
 
 2. Database Migration:
+   Run custom dartmouth models related migrations.
+
 ```sh
-flask --app codehelp migrate
+flask --app codehelp dartmouth-migrations
 ```
-
-## Available Models
-
-- `codellama-13b-python-hf`: Specialized for Python code assistance
-- `codellama-13b-instruct-hf`: General code and instruction following
-- `llama-3-1-8b-instruct`: Smaller alternative model
 
 ## Limitations
 
 - API requests require valid Dartmouth API key
-- Query limits enforced per user
+- Query limits enforced per user. However, if a user is in two different classes, then the query limit might be buggy the way the database changes are implemented.
 - Models may have different capabilities than OpenAI equivalents
 
-The integration enables using Dartmouth's AI models while maintaining CodeHelp's core functionality for programming assistance.
+## Base URL Configuration for Testing
 
-### Base URL Configuration
-Base URL for the API endpoints can be configured in the environment settings. Default development URL is `http://localhost:5000/api/v1`
-
-
-## CodeHelp API Integration
-
-### API Overview
-The CodeHelp API provides functionality for managing code help requests and responses through a RESTful interface. The API is built using Python Flask and interacts with a MongoDB database.
-
-### Authentication
-Authentication is handled through JWT tokens. Users must obtain a valid token to access protected endpoints.
-
-### Core Components
-
-#### api.py
-- Main API router and endpoint handler
-- Implements Flask RESTful architecture
-- Handles the following endpoints:
-    - POST `/auth/login`: User authentication and JWT token generation
-    - POST `/help/request`: Create new code help request
-    - GET `/help/requests`: Retrieve all help requests
-    - GET `/help/request/{id}`: Get specific help request
-    - PUT `/help/request/{id}`: Update help request status
-    - DELETE `/help/request/{id}`: Remove help request
-
-#### api_requests.py
-- HTTP request handler for API operations
-- Manages API request lifecycle
-- Implements the following functionality:
-    - Token management and refresh
-    - Request validation
-    - Error handling and response formatting
-    - Rate limiting implementation
-    - Request retries with exponential backoff
-
-### Request/Response Format
-All API requests and responses use JSON format:
+Base URL for the API endpoints can be configured in the environment settings. Default development URL is `http://localhost:5000/`
