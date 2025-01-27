@@ -59,7 +59,7 @@ Wrote a new module called `dartmouth.py` located in `src/gened` meant to replace
 
 ### 3. Query Management
 
-- Modified the database to add `queries_used` column in the `users` table that is responsible for making sure that a student does not exceed the allocated query limit to them. The `max_queries` column in the
+- Modified the database to add `queries_used` column in the `users` table that is responsible for making sure that a student does not exceed the allocated query limit to them. The `max_queries` column in the `classes` table is responsible for setting the max query limit on each class that an instructor has.
 - Added per-user query tracking and limits
 - Query counts visible in instructor and admin interfaces
 - Query reset functionality available to instructors
