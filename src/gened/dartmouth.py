@@ -159,8 +159,8 @@ def with_llm(*, use_system_key: bool = False, spend_token: bool = False) -> Call
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-
-async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], str]:
+ 
+async def get_completion(llm: LLMConfig, prompt: list) -> tuple[dict[str, str], str]:
     try:
         # Get/refresh JWT token
         if not hasattr(llm, '_token') or not llm._token or isTokenExpired(llm._token, False):
@@ -171,22 +171,33 @@ async def get_completion(llm: LLMConfig, prompt: str) -> tuple[dict[str, str], s
         # else:
         #     print("Already have unexpired token")
 
-        # Generate API request 
-        prompt, parameters = generateInstructions(prompt, None)
+        formattedURL = f"{BASE_URL}{llm.model}"
         
-        # Get response
-        resp = sendInstructions(
-            f"{BASE_URL}{llm.model}",
-            None,
-            llm._token,
-            prompt,
-            parameters
+        # print(f"Prompt being sent: {prompt}") 
+        # print(f"Type of prompt being sent: {type(prompt)}")
+        # print("Formatted url: ", formattedURL)
+        resp = requests.post(
+            headers= {"accept": "application/json",
+                      "Authorization": f"Bearer {llm._token}",
+                      "Content-Type": "application/json"},
+            url=formattedURL,
+            json={
+                "messages": prompt,
+                "model": "unused",
+                "temperature": 0.25,
+                "max_tokens": 1000,
+            },
         )
         
         if resp.status_code != 200:
+            print(f"Error: {resp.text}")
             return {'error': resp.text}, f"Error: {resp.text}"
-            
-        return resp.json(), resp.json()["generated_text"].strip()
+
+        if resp.json()["choices"][0]["finish_reason"] == "length":  # "length" if max_tokens reached
+            current_app.logger.warning("Response exceeded maximum length and was truncated")
+
+        # print(resp.json())
+        return resp.json(), resp.json()["choices"][0]["message"]["content"]
 
     except Exception as e:
         current_app.logger.error(f"Dartmouth API Error: {e}")
@@ -243,8 +254,6 @@ def sendInstructions(apiURL, key, token, prompt, parameters):
         exit()
     else:
         try:
-            json_response = response.json()
-            print(f'Response from the model (JSON): {json_response}\n\n')
             return response
         except requests.exceptions.JSONDecodeError as e:
             print(f"Failed to decode JSON response: {str(e)}")

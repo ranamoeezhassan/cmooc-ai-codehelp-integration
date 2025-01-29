@@ -228,7 +228,7 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code:
         cleanup_prompt = prompts.make_cleanup_prompt(response_text=response_txt)
         cleanup_response, cleanup_response_txt = await get_completion(
             llm,  # Pass whole llm config
-            cleanup_prompt
+            [{"role" : "user", "content": cleanup_prompt}]
         )
         responses.append(cleanup_response)
         response_txt = cleanup_response_txt
