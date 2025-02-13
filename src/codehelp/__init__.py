@@ -20,6 +20,7 @@ def create_app(test_config: dict[str, Any] | None = None, instance_path: Path | 
     app_config = dict(
         APPLICATION_TITLE='CodeHelp',
         DARTMOUTH_API_KEY=os.environ.get('DARTMOUTH_API_KEY'),
+        MISTRAL_API_KEY=os.environ.get('MISTRAL_API_KEY'),
         SECRET_KEY=os.environ.get('SECRET_KEY'),
         APPLICATION_AUTHOR='Mark Liffiton, Modified by Rana Moeez Hassan',
         SYSTEM_MODEL=os.environ.get('SYSTEM_MODEL'),
