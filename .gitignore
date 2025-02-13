@@ -27,3 +27,6 @@ cmoocenv
 *.csr
 *.cert
 ssl/
+
+# Data from mooc stuff
+2023**
