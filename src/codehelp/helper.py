@@ -32,10 +32,12 @@ from gened.testing.mocks import mock_async_completion
 from flask import Flask, current_app
 import os
 import importlib
-from typing import Any
+from typing import Any, Union
 from . import prompts
 from .context import (
     ContextConfig,
+    TaskInstructions,
+    format_context,
     get_available_contexts,
     get_context_by_name,
     record_context_string,
@@ -161,7 +163,9 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code:
       1) A list of response objects from the Dartmouth completion (to be stored in the database)
       2) A dictionary of response text, potentially including keys 'insufficient' and 'main'.
     '''
-    context_str = context.prompt_str() if context is not None else None
+    # context_str = context.prompt_str() if context is not None else None
+
+    context_str = format_context(context) if context is not None else None
 
     # Launch the "sufficient detail" check concurrently with the main prompt
     task_main = asyncio.create_task(
@@ -217,14 +221,15 @@ def run_query(llm: LLMConfig, context: ContextConfig | None, code: str, error: s
     return query_id
 
 
-def record_query(context: ContextConfig | None, code: str, error: str, issue: str) -> int:
+def record_query(context: Union[ContextConfig, TaskInstructions, None], code: str, error: str, issue: str) -> int:
     db = get_db()
     auth = get_auth()
     role_id = auth['role_id']
 
     if context is not None:
         context_name = context.name
-        context_str = context.prompt_str()
+        # context_str = context.prompt_str()
+        context_str = format_context(context)
         context_string_id = record_context_string(context_str)
     else:
         context_name = None

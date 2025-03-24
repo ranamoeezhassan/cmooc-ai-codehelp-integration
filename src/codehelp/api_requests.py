@@ -14,7 +14,7 @@ def get_access_token(username, password):
     response_data = response.json()
     return response_data["access_token"]
 
-def submit_query(access_token, code, error, issue, context=None):
+def submit_query(access_token, code, error, issue, context=None, task_instructions=None):
     data = {
         "code": code,
         "error": error,
@@ -22,6 +22,8 @@ def submit_query(access_token, code, error, issue, context=None):
     }
     if context is not None:
         data["context"] = context
+    if task_instructions is not None:
+        data["task_instructions"] = task_instructions
 
     response = requests.post(
         "http://127.0.0.1:5000/api/query",

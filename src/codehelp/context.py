@@ -14,6 +14,7 @@ from werkzeug.datastructures import ImmutableMultiDict
 from gened.auth import get_auth
 from gened.db import get_db
 
+from typing import Any, Union
 
 def _default_langs() -> list[str]:
     langs: list[str] = current_app.config['DEFAULT_LANGUAGES']  # declaration keeps mypy happy
@@ -168,3 +169,33 @@ def record_context_string(context_str: str) -> int:
     context_string_id = cur.fetchone()['id']
     assert isinstance(context_string_id, int)
     return context_string_id
+
+@dataclass(frozen=True)
+class TaskInstructions:
+    """Dynamic task instructions that can be passed directly without database storage"""
+    tools: dict[str, Any] | None = None
+    details: str | None = None
+    avoid: str | None = None
+    name: str | None = None
+
+def format_context(context: Union[ContextConfig, TaskInstructions, None]) -> str:
+    """Format context or task instructions into prompt format"""
+    if context is None:
+        return ""
+        
+    formatted = []
+    
+    if isinstance(context, (ContextConfig, TaskInstructions)):
+        if hasattr(context, 'tools') and context.tools:
+            formatted.append("Available tools and APIs:")
+            formatted.append(json.dumps(context.tools, indent=2))
+            
+        if hasattr(context, 'details') and context.details:
+            formatted.append("\nTask details:")
+            formatted.append(context.details)
+            
+        if hasattr(context, 'avoid') and context.avoid:
+            formatted.append("\nThings to avoid:")
+            formatted.append(context.avoid)
+            
+    return "\n".join(formatted)

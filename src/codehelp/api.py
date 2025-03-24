@@ -12,7 +12,7 @@ from .helper import run_query, get_query
 from .context import get_context_by_name, record_context_string
 from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
-from .context import get_context_by_name, ContextConfig, get_available_contexts
+from .context import get_context_by_name, ContextConfig, TaskInstructions, format_context, get_available_contexts
 
 bp = Blueprint('api', __name__)
 SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -67,13 +67,22 @@ def token_required(f):
 @with_llm(spend_token=True)
 def submit_query(llm: LLMConfig):
     data = request.get_json()
-    
-    # Get context if provided
+
+    # Get either context or task_instructions
     context = None
     if 'context' in data:
         context = get_context_by_name(data['context'])
-        if context is None:
-            return jsonify({"error": f"Context not found: {data['context']}"}), 400
+    elif 'task_instructions' in data:
+        try:
+            task_data = data['task_instructions']
+            context = TaskInstructions(
+                tools=task_data.get('tools'),
+                details=task_data.get('details'),
+                avoid=task_data.get('avoid'),
+                name=task_data.get('name')
+            )
+        except Exception as e:
+            return jsonify({"error": f"Invalid task instructions format: {str(e)}"}), 400
 
     # Extract query data    
     code = data.get("code", "")
@@ -82,14 +91,14 @@ def submit_query(llm: LLMConfig):
     if (code == None or error == None or issue == None):
         return jsonify({"error": f"Code, Error or Issue parameters cant be none (use empty string)"}), 401
 
-    # Run query and get response
+    # Run query using the formatted context
     query_id = run_query(llm, context, code, error, issue)
     query_row, responses = get_query(query_id)
 
     return jsonify({
         "query_id": query_id,
         "responses": responses,
-        "context": context.name if context else None
+        "context": context.name if hasattr(context, 'name') else None
     })
 
 @bp.route("/api/query/<int:query_id>", methods=["GET"]) 
