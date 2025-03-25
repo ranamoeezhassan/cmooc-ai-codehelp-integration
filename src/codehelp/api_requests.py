@@ -3,16 +3,40 @@ import os
 from dotenv import load_dotenv
 
 def get_access_token(username, password):
-    response = requests.post(
-        "http://127.0.0.1:5000/api/login",
-        json={
-            "username": username,
-            "password": password
-        }
-    )
-    # print("Raw response text with token:", response.text)
-    response_data = response.json()
-    return response_data["access_token"]
+    """Get access token from API with improved error handling."""
+    try:
+        response = requests.post(
+            "http://127.0.0.1:5000/api/login",
+            json={
+                "username": username,
+                "password": password
+            }
+        )
+        # Ensure the request was successful
+        response.raise_for_status()
+        
+        try:
+            response_data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"Failed to decode JSON response. Raw response: {response.text}")
+            raise ValueError("Invalid JSON response from server")
+            
+        if "access_token" not in response_data:
+            raise ValueError("No access token in response")
+            
+        return response_data["access_token"]
+        
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to server. Make sure the Flask app is running.")
+        print("Try: flask --app codehelp run")
+        raise
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error: {e}")
+        print(f"Response content: {response.text}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise
 
 def submit_query(access_token, code, error, issue, context=None, task_instructions=None):
     data = {
