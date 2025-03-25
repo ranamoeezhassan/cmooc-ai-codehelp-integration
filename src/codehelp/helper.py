@@ -37,7 +37,6 @@ from . import prompts
 from .context import (
     ContextConfig,
     TaskInstructions,
-    format_context,
     get_available_contexts,
     get_context_by_name,
     record_context_string,
@@ -156,16 +155,16 @@ def help_view(query_id: int) -> str | Response:
 
     return render_template("help_view.html", query=query_row, responses=responses, history=history, topics=topics)
 
-async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code: str, error: str, issue: str) -> tuple[list[dict[str, str]], dict[str, str]]: # type: ignore
+async def run_query_prompts(llm: LLMConfig, context: ContextConfig | TaskInstructions | None, code: str, error: str, issue: str) -> tuple[list[dict[str, str]], dict[str, str]]: # type: ignore
     ''' Run the given query against the coding help system of prompts using Dartmouth API.
 
     Returns a tuple containing:
       1) A list of response objects from the Dartmouth completion (to be stored in the database)
       2) A dictionary of response text, potentially including keys 'insufficient' and 'main'.
     '''
-    # context_str = context.prompt_str() if context is not None else None
+    context_str = context.prompt_str() if context is not None else None
 
-    context_str = format_context(context) if context is not None else None
+    # context_str = format_context(context) if context is not None else None
 
     # Launch the "sufficient detail" check concurrently with the main prompt
     task_main = asyncio.create_task(
@@ -211,7 +210,7 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | None, code:
         # Give them the request for more information plus the main response
         return responses, {'insufficient': response_sufficient_txt, 'main': response_txt}
 
-def run_query(llm: LLMConfig, context: ContextConfig | None, code: str, error: str, issue: str) -> int: # type: ignore
+def run_query(llm: LLMConfig, context: ContextConfig | TaskInstructions | None, code: str, error: str, issue: str) -> int: # type: ignore
     query_id = record_query(context, code, error, issue)
 
     responses, texts = asyncio.run(run_query_prompts(llm, context, code, error, issue))
@@ -228,8 +227,9 @@ def record_query(context: Union[ContextConfig, TaskInstructions, None], code: st
 
     if context is not None:
         context_name = context.name
-        # context_str = context.prompt_str()
-        context_str = format_context(context)
+        context_str = context.prompt_str()
+        # print("The context string is:\n", context_str)
+        # context_str = format_context(context)
         context_string_id = record_context_string(context_str)
     else:
         context_name = None

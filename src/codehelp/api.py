@@ -12,7 +12,7 @@ from .helper import run_query, get_query
 from .context import get_context_by_name, record_context_string
 from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
-from .context import get_context_by_name, ContextConfig, TaskInstructions, format_context, get_available_contexts
+from .context import get_context_by_name, ContextConfig, TaskInstructions, get_available_contexts
 
 bp = Blueprint('api', __name__)
 SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -24,24 +24,71 @@ def generate_token(user_id):
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
+# @bp.route("/api/login", methods=['POST'])
+# def api_login() -> Response:
+#     data = request.get_json()
+#     username = data.get('username')
+#     password = data.get('password')
+#     db = get_db()
+#     # auth_row = get_auth()
+#     auth_row = db.execute("SELECT * FROM auth_local JOIN users ON auth_local.user_id=users.id WHERE username=?", [username]).fetchone()
+
+#     if not auth_row or not check_password_hash(auth_row['password'], password):
+#         return jsonify({"error": "Invalid username or password"}), 401
+
+#     # Set session auth user and class
+#     set_session_auth_user(auth_row['id'])
+#     last_class_id = get_last_class(auth_row['id'])
+#     set_session_auth_class(last_class_id)
+
+#     token = generate_token(auth_row['id'])
+#     return jsonify({"access_token": token})
+
 @bp.route("/api/login", methods=['POST'])
 def api_login() -> Response:
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
     db = get_db()
-    auth_row = db.execute("SELECT * FROM auth_local JOIN users ON auth_local.user_id=users.id WHERE username=?", [username]).fetchone()
+
+    # Get user data with all necessary information including admin status
+    auth_row = db.execute("""
+        SELECT 
+            users.id,
+            users.is_admin,
+            auth_local.password,
+            users.display_name,
+            roles.role as role_name
+        FROM users
+        JOIN auth_local ON auth_local.user_id = users.id
+        LEFT JOIN roles ON users.id = roles.user_id
+        WHERE users.auth_name = ?
+    """, [username]).fetchone()
 
     if not auth_row or not check_password_hash(auth_row['password'], password):
         return jsonify({"error": "Invalid username or password"}), 401
 
-    # Set session auth user and class
+    # Set up auth session
     set_session_auth_user(auth_row['id'])
     last_class_id = get_last_class(auth_row['id'])
     set_session_auth_class(last_class_id)
 
-    token = generate_token(auth_row['id'])
-    return jsonify({"access_token": token})
+    # Generate token with additional claims
+    payload = {
+        "user_id": auth_row['id'],
+        "is_admin": bool(auth_row['is_admin']),
+        "role": auth_row['role_name'] if auth_row['role_name'] else None,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    return jsonify({
+        "access_token": token,
+        "user_info": {
+            "is_admin": bool(auth_row['is_admin']),
+            "role": auth_row['role_name']
+        }
+    })
 
 def token_required(f):
     @wraps(f)
@@ -154,6 +201,11 @@ def get_context(name):
 @token_required
 def create_context():
     """Create a new context (instructor only)."""
+    # Add debugging for role verification
+    print("Auth info:", g.auth)
+    print("Is admin:", g.auth.get('is_admin'))
+    print("Role:", g.auth.get('role'))
+
     if not g.auth.get('is_admin') and g.auth.get('role') != 'instructor':
         return jsonify({"error": "Unauthorized. Requires instructor role."}), 403
     

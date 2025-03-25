@@ -109,6 +109,60 @@ Keywords and concepts to avoid (do not mention these in your response at all): <
 """)
         return template.render(tools=self._list_fmt(self.tools), details=self.details, avoid=self._list_fmt(self.avoid))
 
+@dataclass(frozen=True)
+class TaskInstructions:
+    """Dynamic task instructions that can be passed directly without database storage"""
+    tools: dict[str, Any] | None = None
+    details: str | None = None
+    avoid: str | None = None
+    name: str | None = None
+    
+    def prompt_str(self) -> str:
+        """ Convert this context into a string to be used in an LLM prompt. """
+        # if nothing is provided but a name, use just that name by itself
+        if not self.tools and not self.details and not self.avoid:
+            return self.name
+
+        template = jinja_env_prompt.from_string("""\
+Task Instruction name: <name>{{ name }}</name>
+{% if tools %}
+Environment and tools: <tools>{{ tools }}</tools>
+{% endif %}
+{% if details %}
+Details: <details>{{ details }}</details>
+{% endif %}
+{% if avoid %}
+Keywords and concepts to avoid (do not mention these in your response at all): <avoid>{{ avoid }}</avoid>
+{% endif %}
+""")
+        return template.render(name=self.name, tools=self._list_fmt(self.tools), details=self.details, avoid=self._list_fmt(self.avoid))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Mimics ContextConfig's to_dict() method"""
+        return {
+            'name': self.name,
+            'tools': self.tools,
+            'details': self.details,
+            'avoid': self.avoid
+        }
+
+    @property
+    def id(self) -> None:
+        """Mimics ContextConfig's id property, returns None since TaskInstructions aren't stored"""
+        return None
+
+    @property
+    def class_id(self) -> None:
+        """Mimics ContextConfig's class_id property, returns None since TaskInstructions aren't associated with classes"""
+        return None
+    
+    @staticmethod
+    def _list_fmt(s: str) -> str:
+        if s:
+            return '; '.join(s.splitlines())
+        else:
+            return ''
+
 
 ### Helper functions for using contexts
 
@@ -169,33 +223,3 @@ def record_context_string(context_str: str) -> int:
     context_string_id = cur.fetchone()['id']
     assert isinstance(context_string_id, int)
     return context_string_id
-
-@dataclass(frozen=True)
-class TaskInstructions:
-    """Dynamic task instructions that can be passed directly without database storage"""
-    tools: dict[str, Any] | None = None
-    details: str | None = None
-    avoid: str | None = None
-    name: str | None = None
-
-def format_context(context: Union[ContextConfig, TaskInstructions, None]) -> str:
-    """Format context or task instructions into prompt format"""
-    if context is None:
-        return ""
-        
-    formatted = []
-    
-    if isinstance(context, (ContextConfig, TaskInstructions)):
-        if hasattr(context, 'tools') and context.tools:
-            formatted.append("Available tools and APIs:")
-            formatted.append(json.dumps(context.tools, indent=2))
-            
-        if hasattr(context, 'details') and context.details:
-            formatted.append("\nTask details:")
-            formatted.append(context.details)
-            
-        if hasattr(context, 'avoid') and context.avoid:
-            formatted.append("\nThings to avoid:")
-            formatted.append(context.avoid)
-            
-    return "\n".join(formatted)
