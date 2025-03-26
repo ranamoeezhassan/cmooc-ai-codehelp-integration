@@ -171,6 +171,7 @@ def get_available_contexts() -> list[ContextConfig]:
     auth = get_auth()
 
     class_id = auth['class_id']
+    print("CLASS ID: ", class_id)
     # Only return contexts that are available:
     #   current date anywhere on earth (using UTC+12) is at or after the saved date
     context_rows = db.execute("SELECT * FROM contexts WHERE class_id=? AND available <= date('now', '+12 hours') ORDER BY class_order ASC", [class_id]).fetchall()

@@ -10,6 +10,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    g,
     redirect,
     render_template,
     request,
@@ -17,7 +18,7 @@ from flask import (
 )
 from werkzeug.wrappers.response import Response
 
-from .auth import get_auth, login_required, set_session_auth_class
+from .auth import _invalidate_g_auth, get_auth, login_required, set_session_auth_class
 from .db import get_db
 from .redir import safe_redirect_next
 from .tz import date_is_past
@@ -157,10 +158,40 @@ def switch_class(class_id: int | None) -> bool:
 
     # admins can access any class, but we don't bother setting last_class_id for them
     if auth['is_admin']:
-        set_session_auth_class(class_id)
-        current_app.logger.info(f"Admin switched to class: {class_id}")
-        return True
+       # Get complete class and role information for admin
+        class_row = db.execute("""
+            SELECT
+                classes.id AS class_id,
+                classes.name AS class_name,
+                roles.id AS role_id,
+                roles.role
+            FROM classes
+            LEFT JOIN roles ON roles.class_id = classes.id AND roles.user_id = ?
+            WHERE classes.id = ?
+        """, [user_id, class_id]).fetchone()
+        
+        if class_row:
+            # Update session first
+            set_session_auth_class(class_id)
+            
+            # Update g.auth with complete information
+            if hasattr(g, 'auth'):
+                g.auth.update({
+                    'class_id': class_row['class_id'],
+                    'class_name': class_row['class_name'],
+                    'role_id': class_row['role_id'],  # Preserve role_id if exists
+                    'role': 'instructor'  # Admin always gets instructor role
+                })
 
+            # Update last_class_id in database
+            db.execute("UPDATE users SET last_class_id = ? WHERE id = ?", [class_id, user_id])
+            db.commit()
+            
+            current_app.logger.info(f"Admin switched to class: {class_id}")
+            return True
+            
+        return False  # Class not found
+    
     if class_id:
         # check for a valid role in the new class
         row = db.execute("""
@@ -181,9 +212,21 @@ def switch_class(class_id: int | None) -> bool:
 
         # otherwise, we can continue with this class_id
         set_session_auth_class(class_id)
+
+        # Update g.auth for token-based authentication
+        if hasattr(g, 'auth'):
+            g.auth.update({
+                'class_id': row['class_id'],
+                'class_name': row['class_name'],
+                'role_id': row['role_id'],
+                'role': row['role']
+            })
+        
         # record as user's latest active class
         db.execute("UPDATE users SET last_class_id=? WHERE users.id=?", [class_id, user_id])
         db.commit()
+
+        # _invalidate_g_auth()
         current_app.logger.info(f"Switched to class: {class_id} for user: {user_id}")
         return True
 
@@ -191,6 +234,17 @@ def switch_class(class_id: int | None) -> bool:
     set_session_auth_class(None)
     db.execute("UPDATE users SET last_class_id=NULL WHERE users.id=?", [user_id])
     db.commit()
+
+    # Clear g.auth for token-based authentication
+    if hasattr(g, 'auth'):
+        g.auth.update({
+            'class_id': None,
+            'class_name': None,
+            'role_id': None,
+            'role': None
+        })
+
+    _invalidate_g_auth()
     current_app.logger.info(f"Cleared current class for user: {user_id}")
     return True
 

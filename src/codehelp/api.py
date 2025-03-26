@@ -1,5 +1,5 @@
 import json
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, current_app, jsonify, request, g
 from functools import wraps
 from werkzeug.security import check_password_hash
 import jwt
@@ -12,6 +12,7 @@ from .helper import run_query, get_query
 from .context import get_context_by_name, record_context_string
 from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
+from gened.classes import switch_class
 from .context import get_context_by_name, ContextConfig, TaskInstructions, get_available_contexts
 
 bp = Blueprint('api', __name__)
@@ -98,55 +99,119 @@ def token_required(f):
             return jsonify({"error": "Token is missing!"}), 403
 
         try:
-            token = token.split(" ")[1]  # Remove "Bearer" prefix
+            token = token.split(" ")[1]
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            g.auth = get_auth()
-            g.auth['user_id'] = data['user_id']  # Ensure user_id is set
-        except Exception as e:
-            return jsonify({"error": str(e)}), 403
+            
+            db = get_db()
+            
+            # Fetch user's current role and class
+            current_role = db.execute("""
+                SELECT
+                    users.id,
+                    users.is_admin,
+                    users.display_name,
+                    users.last_class_id,
+                    roles.id AS role_id,
+                    roles.role AS role_name,
+                    classes.id AS class_id,
+                    classes.name AS class_name
+                FROM users
+                LEFT JOIN roles ON roles.user_id = users.id
+                LEFT JOIN classes ON classes.id = users.last_class_id
+                WHERE users.id = ? AND roles.class_id = users.last_class_id
+            """, [data['user_id']]).fetchone()
+
+            # Fetch all other available classes for the user
+            other_classes = db.execute("""
+                SELECT 
+                    classes.id AS class_id,
+                    classes.name AS class_name,
+                    roles.id AS role_id,
+                    roles.role AS role_name
+                FROM roles
+                JOIN classes ON classes.id = roles.class_id
+                WHERE roles.user_id = ? AND roles.active = 1
+                ORDER BY classes.id
+            """, [data['user_id']]).fetchall()
+
+            # Initialize g.auth with comprehensive data
+            g.auth = {
+                'user_id': data['user_id'],
+                'is_admin': current_role['is_admin'] if current_role else data.get('is_admin', False),
+                'display_name': current_role['display_name'] if current_role else None,
+                'role': current_role['role_name'] if current_role else None,
+                'role_id': current_role['role_id'] if current_role else None,
+                'class_id': current_role['class_id'] if current_role else None,
+                'class_name': current_role['class_name'] if current_role else None,
+                'class_experiments': [],
+                'other_classes': [{
+                    'class_id': row['class_id'],
+                    'class_name': row['class_name'],
+                    'role_id': row['role_id'],
+                    'role': row['role_name']
+                } for row in other_classes]
+            }
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
 
         return f(*args, **kwargs)
     return decorated_function
+
 
 @bp.route("/api/query", methods=["POST"])
 @token_required
 @class_enabled_required
 @with_llm(spend_token=True)
 def submit_query(llm: LLMConfig):
-    data = request.get_json()
+    """Submit a query and return the response."""
+    try:
+        data = request.get_json()
+        current_app.logger.debug("Received query request")
+        current_app.logger.debug(f"Request data: {data}")
+        current_app.logger.debug(f"Auth: {g.auth}")
 
-    # Get either context or task_instructions
-    context = None
-    if 'context' in data:
-        context = get_context_by_name(data['context'])
-    elif 'task_instructions' in data:
-        try:
-            task_data = data['task_instructions']
-            context = TaskInstructions(
-                tools=task_data.get('tools'),
-                details=task_data.get('details'),
-                avoid=task_data.get('avoid'),
-                name=task_data.get('name')
-            )
-        except Exception as e:
-            return jsonify({"error": f"Invalid task instructions format: {str(e)}"}), 400
+        # Get either context or task_instructions
+        context = None
+        if 'context' in data:
+            context = get_context_by_name(data['context'])
+            if not context:
+                return jsonify({"error": f"Context not found: {data['context']}"}), 404
+        elif 'task_instructions' in data:
+            try:
+                task_data = data['task_instructions']
+                context = TaskInstructions(
+                    tools=task_data.get('tools'),
+                    details=task_data.get('details'),
+                    avoid=task_data.get('avoid'),
+                    name=task_data.get('name')
+                )
+            except Exception as e:
+                current_app.logger.error(f"Invalid task instructions: {e}")
+                return jsonify({"error": f"Invalid task instructions format: {str(e)}"}), 400
 
-    # Extract query data    
-    code = data.get("code", "")
-    error = data.get("error", "")
-    issue = data.get("issue", "")
-    if (code == None or error == None or issue == None):
-        return jsonify({"error": f"Code, Error or Issue parameters cant be none (use empty string)"}), 401
+        # Extract query data
+        code = data.get("code", "")
+        error = data.get("error", "")
+        issue = data.get("issue", "")
+        if code is None or error is None or issue is None:
+            return jsonify({"error": "Code, Error, or Issue parameters cannot be None"}), 400
 
-    # Run query using the formatted context
-    query_id = run_query(llm, context, code, error, issue)
-    query_row, responses = get_query(query_id)
+        # Run query using the formatted context
+        query_id = run_query(llm, context, code, error, issue)
+        query_row, responses = get_query(query_id)
 
-    return jsonify({
-        "query_id": query_id,
-        "responses": responses,
-        "context": context.name if hasattr(context, 'name') else None
-    })
+        return jsonify({
+            "query_id": query_id,
+            "responses": responses,
+            "context": context.name if hasattr(context, 'name') else None
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error processing query: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @bp.route("/api/query/<int:query_id>", methods=["GET"]) 
 @token_required
@@ -265,3 +330,26 @@ def delete_context(name):
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500
+    
+
+@bp.route("/api/classes/switch/<int:class_id>", methods=["POST"])
+@token_required
+def switch_active_class(class_id):
+    """Switch active class for the user."""
+    # print("Auth before switch state: ", g.auth)
+    success = switch_class(class_id)
+
+    if not success:
+        print(f"Failed to switch class {class_id} for user {g.auth['user_id']}")
+        current_app.logger.error(f"Failed to switch class {class_id} for user {g.auth['user_id']}")
+        return jsonify({"error": f"Failed to switch class {class_id}. User may not have access."}), 403
+
+    # print("Auth after switch state: ", g.auth)
+
+    return jsonify({
+        "message": f"Switched to class: {g.auth['class_name']}",
+        "class_id": g.auth['class_id'],
+        "role": g.auth['role'],
+        "role_id": g.auth['role_id'],
+        "other_classes": g.auth['other_classes']
+    })
