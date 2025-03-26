@@ -176,209 +176,165 @@ def switch_to_class(token, class_id):
     return response.json()
 
 
-# if __name__ == "__main__":
-#     load_dotenv()
-#     username = "ranamoeez"
-#     password = os.environ.get("ACCOUNT_PASSWORD")
-
-#     # Get token
-#     token = get_access_token(username, password)
-
-#     # Submit a query and print it
-#     # response = submit_query(token, code="def print(): yo", error="IndentationError", issue="Cant print stuff", context=None)
-#     # print(response.json())
-    
-#     # List all contexts
-#     # contexts = get_contexts(token)
-#     # print("Available contexts:", contexts)
-    
-#     # # Get specific context
-#     # context = get_context(token, "Writing and Compiling First Program")
-#     # print("Context retreived by name:", context)
-    
-#     # # Create new context (if instructor)
-#     # new_context = create_context(token, "new_context", {"tools": ["python", "flask"]})
-#     # print("New context:", new_context)
-    
-#     # # Submit query with context
-#     # response = submit_query(token, 
-#     #     code="def print(): yo", 
-#     #     error="IndentationError", 
-#     #     issue="Cant print stuff", 
-#     #     context="python"
-#     # )
-#     # print(response.json())
-#     switch_to_class(token, 1)
-
-#     print("==============================================\n")
-#     print("TESTING QUERIES SENT BY ADMIN ON TEST CLASS\n")
-#     # 1. Testing Python programming without loops
-#     submit_query(
-#         access_token=token,
-#         code="def sum_list(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total",
-#         error="",
-#         issue="How can I sum a list without using loops?",
-#         task_instructions={
-#             "tools": "Python",
-#             "details": "Write a function to sum all numbers in a list without using loops",
-#             "avoid": "loops\r\nfor\r\nwhile",
-#             "name": "recursive_sum"
-#         }
-#     )
-
-#     # 2. Testing C programming with specific requirements
-#     submit_query(
-#         access_token=token,
-#         code="void reverse(int arr[]) {\n    for(int i=0; i<len; i++) {\n        // stuck here\n    }\n}",
-#         error="",
-#         issue="How to reverse array without loops?",
-#         task_instructions={
-#             "tools": "C",
-#             "details": "Write a function to reverse an array in-place using recursion",
-#             "avoid": "Do not use loops or additional arrays",
-#             "name": "array_reverse"
-#         }
-#     )
-
-#     # 3. Mixed language question about algorithms
-#     submit_query(
-#         access_token=token,
-#         code="def binary_search(arr, target):\n    pass",
-#         error="",
-#         issue="How to implement binary search in both C and Python?",
-#         task_instructions={
-#             "tools": "C\r\nPython",
-#             "details": "Implement binary search algorithm that works for sorted arrays",
-#             "avoid": "Do not use built-in search functions or linear search",
-#             "name": "binary_search_implementation_test2"
-#         }
-#     )
-
-#     # 4. Debugging specific case
-#     submit_query(
-#         access_token=token,
-#         code="int main() {\n    int* ptr;\n    *ptr = 5;\n    return 0;\n}",
-#         error="Segmentation fault",
-#         issue="Why am I getting a segmentation fault? I think I understand how pointers work",
-#         task_instructions={
-#             "tools": "C",
-#             "details": "Debug a program using pointers and memory allocation",
-#             "avoid": "Do not use global variables or arrays",
-#             "name": "pointer_debugging 3"
-#         }
-#     )
-
-#     # 5. Testing if normal contexts still work
-#     code_message = r'''
-#     #include <stdio.h>
-#     int main() {
-#         int a = 5;
-#         if (a = 10) {
-#             printf("True\n");
-#         }
-#         return 0;
-#     }
-#     '''
-#     error_message = "Error: Logical error"
-#     issue_message = "I thought this would check if a is equal to 10, but it’s not working the way I expected."
-#     submit_query(token, code_message, error_message, issue_message, context="new_context" )
-
-#     print("==============================================\n")
-
-#     print("==============================================\n")
-#     print("TESTING CONTEXTS RETRIEVED ON TEST CLASS\n")
-
-#     allContexts = get_contexts(token)
-#     print("Contexts from Class 1: ", allContexts)
-#     print("==============================================\n")
-
-#     switch_to_class(token, 2)
-
-#     print("==============================================\n")
-#     print("TESTING CREATING CONTEXTS BY ADMIN ON NEW TEST CLASS\n")
-#     testing_context = create_context(token, "Testing Context", {"tools": "C\r\nPython", "details": "Student learning to use C", "avoid": "libraries"})
-#     print(testing_context)  
-
-#     print("==============================================\n")
-
-#     print("==============================================\n")
-#     print("TESTING CONTEXTS RETRIEVED ON NEW TEST CLASS\n")
-#     allContexts = get_contexts(token)
-#     print("Contexts from Class 2: ", allContexts)
-
-#     print("==============================================\n")
-
-#     print("==============================================\n")
-#     print("TESTING QUERIES SENT BY STUDENT ON TEST CLASS\n")
-#     username = "student1"
-
-#     # Get token for student account
-#     student_token = get_access_token(username, password)
-#     switch_to_class(student_token, 1)
-
-#     # Testing Python programming without loops with the student account just to confirm
-#     submit_query(
-#         access_token=student_token,
-#         code="def sum_list(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total",
-#         error="",
-#         issue="How can I sum a list without using loops?",
-#         task_instructions={
-#             "tools": "Python",
-#             "details": "Write a function to sum all numbers in a list without using loops",
-#             "avoid": "loops\r\nfor\r\nwhile",
-#             "name": "recursive_sum"
-#         }
-#     )
-#     print("==============================================\n")
-
-#     print("==============================================\n")
-#     print("TESTING CONTEXTS RETRIEVED BY STUDENT ON TEST CLASS\n")
-
-#     allContexts = get_contexts(student_token)
-#     print("Contexts from Student's Class: ", allContexts)
-
-#     print("==============================================\n")
-
-
-
 if __name__ == "__main__":
     load_dotenv()
-    try:
-        # Get admin credentials
-        username = "ranamoeez"
-        password = "password"  # or from env: os.environ.get("ACCOUNT_PASSWORD")
+    username = "ranamoeez"
+    password = os.environ.get("ACCOUNT_PASSWORD")
 
-        # 1. Get token
-        print("\nGetting access token...")
-        token = get_access_token(username, password)
-        print("Token received successfully")
+    # Get token
+    token = get_access_token(username, password)
 
-        # 2. Switch to class 1
-        print("\nSwitching to class 1...")
-        switch_response = switch_to_class(token, 1)
-        print("Switch response:", switch_response)
+    # Submit a query and print it
+    # response = submit_query(token, code="def print(): yo", error="IndentationError", issue="Cant print stuff", context=None)
+    # print(response.json())
+    
+    # List all contexts
+    # contexts = get_contexts(token)
+    # print("Available contexts:", contexts)
+    
+    # # Get specific context
+    # context = get_context(token, "Writing and Compiling First Program")
+    # print("Context retreived by name:", context)
+    
+    # # Create new context (if instructor)
+    # new_context = create_context(token, "new_context", {"tools": ["python", "flask"]})
+    # print("New context:", new_context)
+    
+    # # Submit query with context
+    # response = submit_query(token, 
+    #     code="def print(): yo", 
+    #     error="IndentationError", 
+    #     issue="Cant print stuff", 
+    #     context="python"
+    # )
+    # print(response.json())
+    switch_to_class(token, 1)
 
-        # 3. Submit test query
-        print("\nSubmitting test query...")
-        try:
-            response = submit_query(
-                access_token=token,
-                code="def test(): pass",
-                error="",
-                issue="Test query",
-                task_instructions={
-                    "tools": "Python",
-                    "details": "Test query submission",
-                    "name": "test_query"
-                }
-            )
-            print("\nQuery Response:")
-            print(response.json())
-            
-        except Exception as e:
-            print(f"\nError submitting query: {e}")
-            raise
+    print("==============================================\n")
+    print("TESTING QUERIES SENT BY ADMIN ON TEST CLASS\n")
+    # 1. Testing Python programming without loops
+    submit_query(
+        access_token=token,
+        code="def sum_list(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total",
+        error="",
+        issue="How can I sum a list without using loops?",
+        task_instructions={
+            "tools": "Python",
+            "details": "Write a function to sum all numbers in a list without using loops",
+            "avoid": "loops\r\nfor\r\nwhile",
+            "name": "recursive_sum"
+        }
+    )
 
-    except Exception as e:
-        print(f"\nScript failed: {e}")
-        raise
+    # 2. Testing C programming with specific requirements
+    submit_query(
+        access_token=token,
+        code="void reverse(int arr[]) {\n    for(int i=0; i<len; i++) {\n        // stuck here\n    }\n}",
+        error="",
+        issue="How to reverse array without loops?",
+        task_instructions={
+            "tools": "C",
+            "details": "Write a function to reverse an array in-place using recursion",
+            "avoid": "Do not use loops or additional arrays",
+            "name": "array_reverse"
+        }
+    )
+
+    # 3. Mixed language question about algorithms
+    submit_query(
+        access_token=token,
+        code="def binary_search(arr, target):\n    pass",
+        error="",
+        issue="How to implement binary search in both C and Python?",
+        task_instructions={
+            "tools": "C\r\nPython",
+            "details": "Implement binary search algorithm that works for sorted arrays",
+            "avoid": "Do not use built-in search functions or linear search",
+            "name": "binary_search_implementation_test2"
+        }
+    )
+
+    # 4. Debugging specific case
+    submit_query(
+        access_token=token,
+        code="int main() {\n    int* ptr;\n    *ptr = 5;\n    return 0;\n}",
+        error="Segmentation fault",
+        issue="Why am I getting a segmentation fault? I think I understand how pointers work",
+        task_instructions={
+            "tools": "C",
+            "details": "Debug a program using pointers and memory allocation",
+            "avoid": "Do not use global variables or arrays",
+            "name": "pointer_debugging 3"
+        }
+    )
+
+    # 5. Testing if normal contexts still work
+    code_message = r'''
+    #include <stdio.h>
+    int main() {
+        int a = 5;
+        if (a = 10) {
+            printf("True\n");
+        }
+        return 0;
+    }
+    '''
+    error_message = "Error: Logical error"
+    issue_message = "I thought this would check if a is equal to 10, but it’s not working the way I expected."
+    submit_query(token, code_message, error_message, issue_message, context="new_context" )
+
+    print("==============================================\n")
+
+    print("==============================================\n")
+    print("TESTING CONTEXTS RETRIEVED ON TEST CLASS\n")
+
+    allContexts = get_contexts(token)
+    print("Contexts from Class 1: ", allContexts)
+    print("==============================================\n")
+
+    switch_to_class(token, 2)
+
+    print("==============================================\n")
+    print("TESTING CREATING CONTEXTS BY ADMIN ON NEW TEST CLASS\n")
+    testing_context = create_context(token, "Testing Context", {"tools": "C\r\nPython", "details": "Student learning to use C", "avoid": "libraries"})
+    print(testing_context)  
+
+    print("==============================================\n")
+
+    print("==============================================\n")
+    print("TESTING CONTEXTS RETRIEVED ON NEW TEST CLASS\n")
+    allContexts = get_contexts(token)
+    print("Contexts from Class 2: ", allContexts)
+
+    print("==============================================\n")
+
+    print("==============================================\n")
+    print("TESTING QUERIES SENT BY STUDENT ON TEST CLASS\n")
+    username = "student1"
+
+    # Get token for student account
+    student_token = get_access_token(username, password)
+    switch_to_class(student_token, 1)
+
+    # Testing Python programming without loops with the student account just to confirm
+    submit_query(
+        access_token=student_token,
+        code="def sum_list(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total",
+        error="",
+        issue="How can I sum a list without using loops?",
+        task_instructions={
+            "tools": "Python",
+            "details": "Write a function to sum all numbers in a list without using loops",
+            "avoid": "loops\r\nfor\r\nwhile",
+            "name": "recursive_sum"
+        }
+    )
+    print("==============================================\n")
+
+    print("==============================================\n")
+    print("TESTING CONTEXTS RETRIEVED BY STUDENT ON TEST CLASS\n")
+
+    allContexts = get_contexts(student_token)
+    print("Contexts from Student's Class: ", allContexts)
+
+    print("==============================================\n")
