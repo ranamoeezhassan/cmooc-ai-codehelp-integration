@@ -33,6 +33,9 @@ dependencies = [
     "python-dotenv~=1.0.0",
     "python-frontmatter~=1.1.0",
     "pytz",
+    "pyjwt",
+    "mistralai",
+    "flask-cors"
 ]
 
 [project.optional-dependencies]

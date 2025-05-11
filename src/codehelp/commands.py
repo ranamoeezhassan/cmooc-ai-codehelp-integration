@@ -44,10 +44,9 @@ def dartmouth_migrations():
         click.echo(f"Migration folder '{migration_folder}' does not exist.")
         return
 
-    migration_files = []
-    for f in os.listdir(migration_folder):
-        if f.endswith('.sql'):
-            migration_files.append(os.path.join(migration_folder, f))
+    migration_files = sorted(
+        [os.path.join(migration_folder, f) for f in os.listdir(migration_folder) if f.endswith('.sql')]
+    )
 
     for file_path in migration_files:
         filename = os.path.basename(file_path)

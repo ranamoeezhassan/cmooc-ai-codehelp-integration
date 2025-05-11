@@ -6,6 +6,7 @@ import jwt
 import os
 import datetime
 from werkzeug.wrappers.response import Response
+from flask_cors import cross_origin
 
 from gened.db import get_db
 from .helper import run_query, get_query
@@ -46,6 +47,7 @@ def generate_token(user_id):
 #     return jsonify({"access_token": token})
 
 @bp.route("/api/login", methods=['POST'])
+@cross_origin()
 def api_login() -> Response:
     data = request.get_json()
     username = data.get('username')
@@ -162,6 +164,7 @@ def token_required(f):
 
 
 @bp.route("/api/query", methods=["POST"])
+@cross_origin()
 @token_required
 @class_enabled_required
 @with_llm(spend_token=True)
