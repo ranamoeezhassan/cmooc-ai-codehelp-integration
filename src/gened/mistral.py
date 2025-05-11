@@ -13,7 +13,7 @@ import os
 
 from .auth import get_auth
 from .db import get_db
-
+from mistralai import Mistral
 
 class ClassDisabledError(Exception):
     pass
@@ -33,17 +33,6 @@ class LLMConfig:
     model: str
     tokens_remaining: int | None = None
     _token: str | None = None
-
-def getBaseURL():
-    load_dotenv()
-    return os.environ.get("BASE_URL")
-
-def getJWTURL():
-    load_dotenv()
-    return os.environ.get("JWT_URL")
-
-BASE_URL = getBaseURL()
-JWT_URL = getJWTURL()
     
 def _get_llm(*, use_system_key: bool = False, spend_token: bool = False) -> LLMConfig:
     db = get_db()
@@ -51,7 +40,8 @@ def _get_llm(*, use_system_key: bool = False, spend_token: bool = False) -> LLMC
     
     def make_system_client(tokens_remaining: int | None = None) -> LLMConfig:
         system_model = current_app.config["SYSTEM_MODEL"]
-        system_key = current_app.config["DARTMOUTH_API_KEY"]
+        system_key = current_app.config["MISTRAL_API_KEY"]
+        print("Getting key: ", system_key)
         return LLMConfig(
             api_key=system_key,
             model=system_model,
@@ -163,45 +153,41 @@ def with_llm(*, use_system_key: bool = False, spend_token: bool = False) -> Call
 async def get_completion(llm: LLMConfig, prompt: list) -> tuple[dict[str, str], str]:
     try:
         # Get/refresh JWT token
-        if not hasattr(llm, '_token') or not llm._token or isTokenExpired(llm._token, False):
-            resp = sendInstructions(JWT_URL, llm.api_key, None, None, None)
-            if resp.status_code != 200:
-                return {'error': 'JWT token error'}, f"Error getting JWT token: {resp.text}"
-            llm._token = resp.json()["jwt"]
-        # else:
-        #     print("Already have unexpired token")
-
-        formattedURL = f"{BASE_URL}{llm.model}"
+        client = Mistral(api_key=llm.api_key)
         
-        # print(f"Prompt being sent: {prompt}") 
+        print(f"Prompt being sent: {prompt}") 
+        print(f'llm: {llm.model}, {llm.api_key}')
         # print(f"Type of prompt being sent: {type(prompt)}")
         # print("Formatted url: ", formattedURL)
-        resp = requests.post(
-            headers= {"accept": "application/json",
-                      "Authorization": f"Bearer {llm._token}",
-                      "Content-Type": "application/json"},
-            url=formattedURL,
-            json={
-                "messages": prompt,
-                "model": "unused",
-                "temperature": 0.25,
-                "max_tokens": 1000,
-            },
-        )
-        
-        if resp.status_code != 200:
-            print(f"Error: {resp.text}")
-            return {'error': resp.text}, f"Error: {resp.text}"
+        # resp = requests.post(
+        #     headers= {"accept": "application/json",
+        #               "Authorization": f"Bearer {llm._token}",
+        #               "Content-Type": "application/json"},
+        #     url=formattedURL,
+        #     json={
+        #         "messages": prompt,
+        #         "model": "unused",
+        #         "temperature": 0.25,
+        #         "max_tokens": 1000,
+        #     },
+        # )
 
-        if resp.json()["choices"][0]["finish_reason"] == "length":  # "length" if max_tokens reached
+        resp = client.chat.complete(
+            model = llm.model,
+            messages = prompt
+        )
+        print(f'Response: {resp}')
+        response_text = resp.choices[0].message.content
+        finish_reason = resp.choices[0].finish_reason
+        
+        if finish_reason == "length":  # "length" if max_tokens reached
             current_app.logger.warning("Response exceeded maximum length and was truncated")
 
-        # print(resp.json())
-        return resp.json(), resp.json()["choices"][0]["message"]["content"]
-
+        return {'response': response_text}, response_text
+        
     except Exception as e:
-        current_app.logger.error(f"Dartmouth API Error: {e}")
-        return {'error': str(e)}, f"Error: {str(e)}"
+            current_app.logger.error(f"Mistral API Error: {e}")
+            return {'error': str(e)}, f"Error: {str(e)}"
 
 def get_models() -> list[Row]:
     db = get_db()

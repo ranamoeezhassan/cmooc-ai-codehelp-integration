@@ -47,7 +47,7 @@ def config_form() -> str:
     class_id = auth['class_id']
 
     class_row = db.execute("""
-        SELECT classes.id, classes.enabled, classes_user.link_ident, classes_user.link_reg_expires, classes_user.dartmouth_key, classes_user.model_id
+        SELECT classes.id, classes.max_queries, classes.enabled, classes_user.link_ident, classes_user.link_reg_expires, classes_user.dartmouth_key, classes_user.model_id
         FROM classes
         LEFT JOIN classes_user
           ON classes.id = classes_user.class_id

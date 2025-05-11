@@ -19,3 +19,16 @@ venv/
 cmoocenv
 
 .DS_Store
+
+# SSL/TLS Certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.cert
+ssl/
+
+# Data from mooc stuff
+2023**
+
+api_requests_notebook.ipynb

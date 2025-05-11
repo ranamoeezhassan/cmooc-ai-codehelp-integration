@@ -68,7 +68,7 @@ dl.profile dd { margin: 0; }
         </button>
       {% endif %}
     </h2>
-    <dl class="profile">
+    <!-- <dl class="profile">
       <dt>Current:</dt>
       {% if auth['role'] %}
         <dd>{{ auth['class_name'] }} ({{ auth['role'] }})</dd>
@@ -103,6 +103,35 @@ dl.profile dd { margin: 0; }
           {% endfor %}
         </dd>
       {% endif %}
+    </dl> -->
+    <dl class="profile">
+      {% if user.full_name %}
+        <dt>Full Name:</dt>
+        <dd>{{ user.full_name }}</dd>
+      {% endif %}
+      {% if user.email %}
+        <dt>Email:</dt>
+        <dd>{{ user.email }}</dd>
+      {% endif %}
+      {% if user.auth_name %}
+        <dt>{{ user.provider_name | title }} username:</dt>
+        <dd>{{ user.auth_name }}</dd>
+      {% endif %}
+      <dt>Current Class:</dt>
+      <dd>{{ auth['class_name'] }} ({{ auth['role'] }})</dd>
+      {% if other_classes %}
+        <dt>Other Classes:</dt>
+        <dd>
+          {% for class in other_classes %}
+          <p>
+            {{ class.name }} ({{ class.role }})
+            <a href="{{ url_for("classes.switch_class_handler", class_id=class.id) }}" class="button is-link is-small is-rounded ml-3" style="vertical-align: center;">
+              Switch to
+            </a>
+          </p>
+          {% endfor %}
+        </dd>
+      {% endif %}
     </dl>
 
   </div>
@@ -110,7 +139,7 @@ dl.profile dd { margin: 0; }
     <dialog id="new_class_dialog" style="width: 75%; min-width: min(32em, 100vw);">
       <div class="content box">
         <h2>Create a New Class</h2>
-        <p>You can create a class, attach an OpenAI API key to it, and invite others to join it as students.  You will be given the 'instructor' role in the class, and you will be able to configure it, control access and registration, and see all queries from students who join.</p>
+        <p>You can create a class, attach an API key to it, and invite others to join it as students.  You will be given the 'instructor' role in the class, and you will be able to configure it, control access and registration, and see all queries from students who join.</p>
         <form action="{{url_for('classes.create_class')}}" method="post">
           <div class="field">
             <label class="label is-size-5" for="class_name">Class Name:</label>
@@ -119,11 +148,11 @@ dl.profile dd { margin: 0; }
             </div>
           </div>
           <div class="field">
-            <label class="label is-size-5" for="openai_key">
-              OpenAI API Key:
+            <label class="label is-size-5" for="dartmouth_key">
+              API Key:
             </label>
             <div class="control">
-              <input class="input" name="openai_key" id="openai_key">
+              <input class="input" name="dartmouth_key" id="dartmouth_key">
             </div>
             <p>(The API key can be left blank for now, but you will need to add one to the class to submit queries.)</p>
           </div>

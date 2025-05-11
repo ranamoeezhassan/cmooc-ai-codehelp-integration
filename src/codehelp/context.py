@@ -14,6 +14,7 @@ from werkzeug.datastructures import ImmutableMultiDict
 from gened.auth import get_auth
 from gened.db import get_db
 
+from typing import Any, Union
 
 def _default_langs() -> list[str]:
     langs: list[str] = current_app.config['DEFAULT_LANGUAGES']  # declaration keeps mypy happy
@@ -108,6 +109,60 @@ Keywords and concepts to avoid (do not mention these in your response at all): <
 """)
         return template.render(tools=self._list_fmt(self.tools), details=self.details, avoid=self._list_fmt(self.avoid))
 
+@dataclass(frozen=True)
+class TaskInstructions:
+    """Dynamic task instructions that can be passed directly without database storage"""
+    tools: dict[str, Any] | None = None
+    details: str | None = None
+    avoid: str | None = None
+    name: str | None = None
+    
+    def prompt_str(self) -> str:
+        """ Convert this context into a string to be used in an LLM prompt. """
+        # if nothing is provided but a name, use just that name by itself
+        if not self.tools and not self.details and not self.avoid:
+            return self.name
+
+        template = jinja_env_prompt.from_string("""\
+Task Instruction name: <name>{{ name }}</name>
+{% if tools %}
+Environment and tools: <tools>{{ tools }}</tools>
+{% endif %}
+{% if details %}
+Details: <details>{{ details }}</details>
+{% endif %}
+{% if avoid %}
+Keywords and concepts to avoid (do not mention these in your response at all): <avoid>{{ avoid }}</avoid>
+{% endif %}
+""")
+        return template.render(name=self.name, tools=self._list_fmt(self.tools), details=self.details, avoid=self._list_fmt(self.avoid))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Mimics ContextConfig's to_dict() method"""
+        return {
+            'name': self.name,
+            'tools': self.tools,
+            'details': self.details,
+            'avoid': self.avoid
+        }
+
+    @property
+    def id(self) -> None:
+        """Mimics ContextConfig's id property, returns None since TaskInstructions aren't stored"""
+        return None
+
+    @property
+    def class_id(self) -> None:
+        """Mimics ContextConfig's class_id property, returns None since TaskInstructions aren't associated with classes"""
+        return None
+    
+    @staticmethod
+    def _list_fmt(s: str) -> str:
+        if s:
+            return '; '.join(s.splitlines())
+        else:
+            return ''
+
 
 ### Helper functions for using contexts
 
@@ -116,6 +171,7 @@ def get_available_contexts() -> list[ContextConfig]:
     auth = get_auth()
 
     class_id = auth['class_id']
+    print("CLASS ID: ", class_id)
     # Only return contexts that are available:
     #   current date anywhere on earth (using UTC+12) is at or after the saved date
     context_rows = db.execute("SELECT * FROM contexts WHERE class_id=? AND available <= date('now', '+12 hours') ORDER BY class_order ASC", [class_id]).fetchall()

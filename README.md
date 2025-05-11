@@ -1,5 +1,4 @@
-Gen-Ed: Generative AI for Education
-===================================
+# Gen-Ed: Generative AI for Education
 
 Gen-Ed is a framework for building web applications that use generative AI
 (LLMs) for education (i.e., organized around instructors and their classes of
@@ -28,17 +27,15 @@ The repository also contains two applications that are built on Gen-Ed:
 in Programming Classes](https://arxiv.org/abs/2308.06921). Mark Liffiton, Brad
 Sheese, Jaromir Savelka, and Paul Denny. 2023. In Proceedings of the 23rd Koli
 Calling International Conference on Computing Education Research (Koli Calling
-'23).  DOI: [10.1145/3631802.3631830](https://doi.org/10.1145/3631802.3631830)
+'23). DOI: [10.1145/3631802.3631830](https://doi.org/10.1145/3631802.3631830)
 
 [2] [Patterns of Student Help-Seeking When Using a Large Language Model-Powered
 Programming Assistant](https://arxiv.org/abs/2310.16984). Brad Sheese, Mark
 Liffiton, Jaromir Savelka, and Paul Denny. 2024. In Proceedings of the 26th
-Australasian Computing Education Conference (ACE '24).  DOI:
+Australasian Computing Education Conference (ACE '24). DOI:
 [10.1145/3636243.3636249](https://doi.org/10.1145/3636243.3636249)
 
-
-Install
--------
+## Install
 
 Requires Python 3.10 or higher.
 
@@ -51,25 +48,23 @@ Requires Python 3.10 or higher.
 pip install -e .
 ```
 
-
-Set Up an Application
----------------------
+## Set Up CodeHelp Application
 
 1. In the root of the repository, create `.env` and populate it with
-   environment variables to configure the application.  See `.env.test` for a
-   list of all available variables.  The required variables are:
+   environment variables to configure the application. See `.env.test` for a
+   list of all available variables. The required variables are:
    - `FLASK_INSTANCE_PATH`: Path to an instance folder for storing the DB,
-     etc.  Commonly set to `instance`.
+     etc. Commonly set to `instance` (Requires the folder to be already created).
    - `SECRET_KEY`: A secure random string used to sign session cookies.
-   - `OPENAI_API_KEY`: Your OpenAI API key to be used for queries outside of a
-     class context (e.g. for free queries).
-   - `SYSTEM_MODEL`: Name from the OpenAI API of the model to be used outside
-     of a class context.  `gpt-4o` is a good default.
-   - `DEFAULT_CLASS_MODEL_SHORTNAME`: Name from the application database for
-     the default model to be used in new classes (can be configured after
-     creating the class).  `GPT-4o` is a good default.
+   - `BASE_URL`: The base URL for API requests (e.g., "https://api.dartmouth.edu").
+   - `JWT_URL`: The JWT token generation endpoint (e.g., "https://api.dartmouth.edu/api/jwt").
+   - `DARTMOUTH_API_KEY`: Your Dartmouth API key for authentication. This is useful if you do not want to setup classes and just want to be able to make queries directly.
+   - `SYSTEM_MODEL`: API endpoint path for the default model (e.g., "/api/ai/tgi/codellama-13b-instruct-hf/generate").
+     Full URL will be constructed as (BASE_URL)(SYSTEM_MODEL).
+   - `DEFAULT_CLASS_MODEL_SHORTNAME`: Display name for the default model in new classes.
+     `CodeLlama-13B` is the standard default.
 
-*Optionally*, if you want to allow logins from 3rd party authentication
+_Optionally_, if you want to allow logins from 3rd party authentication
 providers, set any of the following pairs with IDs/secrets obtained from
 registering your application with the given provider:
 
@@ -82,15 +77,19 @@ MICROSOFT_CLIENT_ID=[...]
 MICROSOFT_CLIENT_SECRET=[...]
 ```
 
-Then, to set up an application (CodeHelp, for example):
-
 2. Initialize database:
 
 ```sh
 flask --app codehelp initdb
 ```
 
-3. Create at least one admin user:
+3. Apply custom dartmouth database migrations:
+
+```sh
+flask --app codehelp dartmouth-migrations
+```
+
+4. Create at least one admin user:
 
 ```sh
 flask --app codehelp newuser --admin [username]
@@ -103,13 +102,11 @@ To change the password:
 flask --app codehelp setpassword [username]
 ```
 
-4. (Optional) To serve files from `/.well-known` (for domain verification,
+5. (Optional) To serve files from `/.well-known` (for domain verification,
    etc.), place the files in a `.well-known` directory inside the Flask
    instance folder.
 
-
-Running an Application
-----------------------
+## Running an Application
 
 For example, to run the CodeHelp app:
 
@@ -120,9 +117,13 @@ flask --app codehelp run
 flask --app codehelp --debug run
 ```
 
+## Dartmouth API Documentation and Details
 
-Running Tests
--------------
+See `DARTMOUTH.md` for details about all the modifications made to the base project and API specifications.
+
+## Running Tests
+
+NOTE: Tests are not working at the moment due to the changes made to switch to dartmouth/mistral models.
 
 First, install test dependencies:
 
@@ -148,28 +149,22 @@ For mypy type checking:
 mypy
 ```
 
-
-Developing
-----------
+## Developing
 
 See `DEVELOPING.md` for additional instructions and information for developing
 an application and/or contributing to the project.
 
+## Author
 
-Author
-------
+Gen-Ed and the included applications are by Mark Liffiton. CodeHelp and Gen-Ed were subsequently modified by Rana Moeez Hassan. The modifications were made to utilize the AI Models API provided by Dartmouth College.
 
-Gen-Ed and the included applications are by Mark Liffiton.
-
-
-Licenses
---------
+## Licenses
 
 Gen-Ed and the included applications are licensed under the GNU Affero General
 Public License version 3 (AGPL-3.0-only).
 
 Brand icons from [Simple Icons](https://simpleicons.org/) are licensed under
-CC0-1.0.  Other icons from [Lucide](https://lucide.dev/) are licensed under the
+CC0-1.0. Other icons from [Lucide](https://lucide.dev/) are licensed under the
 Lucide ISC license.
 
 For the text of these licenses, see the LICENSES directory.

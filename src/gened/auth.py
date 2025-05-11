@@ -19,6 +19,7 @@ from flask import (
     session,
     url_for,
 )
+import jwt
 from werkzeug.security import check_password_hash
 from werkzeug.wrappers.response import Response
 
@@ -69,123 +70,175 @@ def set_session_auth_user(user_id: int) -> None:
     _invalidate_g_auth()
 
 
+# def set_session_auth_class(class_id: int | None) -> None:
+#     """ Set the current session's active class (on login or class switch).
+#         Adds to any existing auth data in the session.
+#     """
+#     sess_auth = session.get(AUTH_SESSION_KEY, {})
+#     assert 'user_id' in sess_auth
+#     assert sess_auth['user_id'] is not None  # must be logged in already for this function to be valid
+#     sess_auth['class_id'] = class_id
+#     session[AUTH_SESSION_KEY] = sess_auth
+#     _invalidate_g_auth()
+
 def set_session_auth_class(class_id: int | None) -> None:
-    """ Set the current session's active class (on login or class switch).
-        Adds to any existing auth data in the session.
+    """Set the current session's active class (on login or class switch).
+       Adds to any existing auth data in the session or token-based auth.
     """
-    sess_auth = session.get(AUTH_SESSION_KEY, {})
-    assert 'user_id' in sess_auth
-    assert sess_auth['user_id'] is not None  # must be logged in already for this function to be valid
-    sess_auth['class_id'] = class_id
-    session[AUTH_SESSION_KEY] = sess_auth
-    _invalidate_g_auth()
-
-
-def _get_auth_from_session() -> AuthDict:
-    """ Populate auth data for the current session based on its current
-        user_id and role_id (if any).
-    """
-    base: AuthDict = {
-        'user_id': None,
-        'is_admin': False,
-        'is_tester': False,
-        'role': None,
-    }
-    # Get the session auth dict, or an empty dict if it's not there, to find
-    # current user_id and role_id (if any).
-    sess_auth = session.get(AUTH_SESSION_KEY, {})
-    sess_user = sess_auth.get('user_id', None)
-    sess_class = sess_auth.get('class_id', None)
-
-    if not sess_user:
-        # No logged in user; return the base/empty auth data
-        return base
+    # Check if using session-based or token-based authentication
+    if AUTH_SESSION_KEY in session:
+        sess_auth = session.get(AUTH_SESSION_KEY, {})
+        assert 'user_id' in sess_auth, "Session does not contain user_id"
+        user_id = sess_auth['user_id']
+    elif hasattr(g, 'auth') and g.auth.get('user_id'):
+        user_id = g.auth['user_id']
+        sess_auth = g.auth  # Use token-based auth
+    else:
+        raise ValueError("No user_id found in session or token-based auth")
 
     db = get_db()
 
-    # Get user's data
-    user_row = db.execute("""
-        SELECT
-            users.display_name,
-            users.is_admin,
-            users.is_tester,
-            auth_providers.name AS auth_provider
-        FROM users
-        LEFT JOIN auth_providers ON auth_providers.id=users.auth_provider
-        WHERE users.id=?
-    """, [sess_user]).fetchone()
+    if class_id is not None:
+        # Fetch class and role information
+        class_row = db.execute("""
+            SELECT classes.id AS class_id, classes.name AS class_name, roles.id AS role_id, roles.role
+            FROM classes
+            JOIN roles ON classes.id = roles.class_id
+            WHERE classes.id = ? AND roles.user_id = ? AND roles.active = 1
+        """, [class_id, user_id]).fetchone()
 
-    if not user_row:
-        # Fall through if user_id is not in database (deleted from DB?)
-        return base
+        if class_row:
+            sess_auth['class_id'] = class_row['class_id']
+            sess_auth['class_name'] = class_row['class_name']
+            sess_auth['role_id'] = class_row['role_id']
+            sess_auth['role'] = class_row['role']
+        else:
+            # Clear class information if the class is invalid
+            sess_auth['class_id'] = None
+            sess_auth['class_name'] = None
+            sess_auth['role_id'] = None
+            sess_auth['role'] = None
+    else:
+        # Clear class information if no class_id is provided
+        sess_auth['class_id'] = None
+        sess_auth['class_name'] = None
+        sess_auth['role_id'] = None
+        sess_auth['role'] = None
 
-    # Create a new AuthDict and populate with data from the database
-    auth_dict: AuthDict = {
-        # from session
-        'user_id': sess_user,
-        'class_id': sess_class,
-        # from DB
-        'display_name': user_row['display_name'],
-        'is_admin': user_row['is_admin'],
-        'is_tester': user_row['is_tester'],
-        'auth_provider': user_row['auth_provider'],
-        # to be filled
-        'class_name': None,
-        'class_experiments': [],
-        'role_id': None,
-        'role': None,
-        'other_classes': [],
-    }
+    # Update session or g.auth
+    if AUTH_SESSION_KEY in session:
+        session[AUTH_SESSION_KEY] = sess_auth
+        _invalidate_g_auth()
+    else:
+        g.auth = sess_auth
 
-    # Check the database for any active roles (may be changed by another user)
-    # and populate class/role information.
-    # Uses WHERE active=1 to only allow active roles.
-    role_rows = db.execute("""
-        SELECT
-            roles.id AS role_id,
-            roles.class_id,
-            roles.role,
-            classes.name,
-            classes.enabled
-        FROM roles
-        JOIN classes ON classes.id=roles.class_id
-        WHERE roles.user_id=? AND roles.active=1
-        ORDER BY roles.id DESC
-    """, [auth_dict['user_id']]).fetchall()
 
-    found_role = False  # track whether the current role from auth is actually found as an active role
-    for row in role_rows:
-        if row['class_id'] == auth_dict['class_id']:
-            found_role = True
-            # add class/role info to auth_dict
-            auth_dict['role_id'] = row['role_id']
-            auth_dict['role'] = row['role']
-            # check for any registered experiments in the current class
-            experiment_class_rows = db.execute("SELECT experiments.name FROM experiments JOIN experiment_class ON experiment_class.experiment_id=experiments.id WHERE experiment_class.class_id=?", [auth_dict['class_id']]).fetchall()
-            auth_dict['class_experiments'] = [row['name'] for row in experiment_class_rows]
-        elif row['enabled']:
-            # store a list of any other classes that are enabled (for navbar switching UI)
-            class_dict: ClassDict = {
-                'class_id': row['class_id'],
-                'class_name': row['name'],
-                'role': row['role'],
-            }
-            auth_dict['other_classes'].append(class_dict)
+# def _get_auth_from_session() -> AuthDict:
+#     """Populate auth data for the current session based on its current
+#     user_id and role_id (if any), or from token if using API auth.
+#     """
+#     base: AuthDict = {
+#         'user_id': None,
+#         'is_admin': False,
+#         'is_tester': False,
+#         'role': None,
+#         'class_id': None,  # Ensure class_id is always present
+#         'class_name': None,
+#         'class_experiments': [],
+#         'role_id': None,
+#         'other_classes': [],
+#     }
 
-    if not found_role and not auth_dict['is_admin']:
-        # ensure we don't keep a class_id in auth if it's not a valid/active one
-        auth_dict['class_id'] = None
+#     # Check for API token first
+#     auth_header = request.headers.get('Authorization')
+#     if auth_header and auth_header.startswith('Bearer '):
+#         token = auth_header.split(' ')[1]
+#         # print("we are here with token", token )
+#         try:
+#             # Decode token to get user_id
+#             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+#             user_id = data['user_id']
+#         except:
+#             return base
+#     else:
+#         # Regular session-based auth
+#         sess_auth = session.get(AUTH_SESSION_KEY, {})
+#         user_id = sess_auth.get('user_id', None)
 
-    if auth_dict['class_id'] is not None:
-        # get the class name (after all the above has shaken out)
-        class_row = db.execute("SELECT name FROM classes WHERE id=?", [auth_dict['class_id']]).fetchone()
-        auth_dict['class_name'] = class_row['name']
-        # admin gets instructor role in all classes automatically
-        if auth_dict['is_admin']:
-            auth_dict['role'] = 'instructor'
+#     if not user_id:
+#         return base
 
-    return auth_dict
+#     db = get_db()
 
+#     # Get user's data
+#     user_row = db.execute("""
+#         SELECT
+#             users.id,
+#             users.display_name,
+#             users.is_admin,
+#             users.is_tester,
+#             auth_providers.name AS auth_provider
+#         FROM users
+#         LEFT JOIN auth_providers ON auth_providers.id=users.auth_provider
+#         WHERE users.id=?
+#     """, [user_id]).fetchone()
+
+#     if not user_row:
+#         return base
+
+#     # Create a new AuthDict and populate with data from the database
+#     auth_dict: AuthDict = {
+#         'user_id': user_id,
+#         'display_name': user_row['display_name'],
+#         'is_admin': user_row['is_admin'],
+#         'is_tester': user_row['is_tester'],
+#         'auth_provider': user_row['auth_provider'],
+#         'class_id': None,
+#         'class_name': None,
+#         'class_experiments': [],
+#         'role_id': None,
+#         'role': None,
+#         'other_classes': [],
+#     }
+
+#     # Retrieve class_id and role from roles table
+#     role_row = db.execute("""
+#         SELECT roles.id as role_id, roles.role, roles.class_id
+#         FROM roles
+#         WHERE roles.user_id = ? AND roles.active = 1
+#         LIMIT 1
+#     """, [user_id]).fetchone()
+
+#     if role_row:
+#         auth_dict['role_id'] = role_row['role_id']
+#         auth_dict['role'] = role_row['role']
+#         auth_dict['class_id'] = role_row['class_id']
+
+#         # If class_id is set, get additional class info
+#         if auth_dict['class_id']:
+#             class_row = db.execute("SELECT name FROM classes WHERE id=?", [auth_dict['class_id']]).fetchone()
+#             if class_row:
+#                 auth_dict['class_name'] = class_row['name']
+#                 # Get experiments for this class
+#                 experiment_rows = db.execute("""
+#                     SELECT experiments.name 
+#                     FROM experiments 
+#                     JOIN experiment_class ON experiment_class.experiment_id=experiments.id 
+#                     WHERE experiment_class.class_id=?
+#                 """, [auth_dict['class_id']]).fetchall()
+#                 auth_dict['class_experiments'] = [row['name'] for row in experiment_rows]
+
+#     # Admin gets instructor role automatically
+#     if auth_dict['is_admin']:
+#         auth_dict['role'] = 'instructor'
+
+#     return auth_dict
+
+# def get_auth() -> AuthDict:
+#     if 'auth' not in g:
+#         g.auth = _get_auth_from_session()
+
+#     return g.auth  # type: ignore[no-any-return]
 
 def get_auth() -> AuthDict:
     if 'auth' not in g:
@@ -193,6 +246,92 @@ def get_auth() -> AuthDict:
 
     return g.auth  # type: ignore[no-any-return]
 
+def _get_auth_from_session() -> AuthDict:
+    """Populate auth data for the current session based on its current
+       user_id and role_id (if any), or from token if using API auth.
+    """
+    base: AuthDict = {
+        'user_id': None,
+        'is_admin': False,
+        'is_tester': False,
+        'role': None,
+        'class_id': None,  # Ensure class_id is always present
+        'class_name': None,
+        'class_experiments': [],
+        'role_id': None,
+        'other_classes': [],
+    }
+
+    # Check for API token first
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        try:
+            # Decode token to get user_id
+            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+            user_id = data['user_id']
+        except jwt.ExpiredSignatureError:
+            current_app.logger.error("Token has expired.")
+            return base
+        except jwt.InvalidTokenError:
+            current_app.logger.error("Invalid token.")
+            return base
+    else:
+        # Regular session-based auth
+        sess_auth = session.get(AUTH_SESSION_KEY, {})
+        user_id = sess_auth.get('user_id', None)
+
+    if not user_id:
+        return base
+
+    db = get_db()
+
+    # Get user's data
+    user_row = db.execute("""
+        SELECT
+            users.id,
+            users.display_name,
+            users.is_admin,
+            users.is_tester,
+            auth_providers.name AS auth_provider
+        FROM users
+        LEFT JOIN auth_providers ON auth_providers.id=users.auth_provider
+        WHERE users.id=?
+    """, [user_id]).fetchone()
+
+    if not user_row:
+        return base
+
+    # Create a new AuthDict and populate with data from the database
+    auth_dict: AuthDict = {
+        'user_id': user_id,
+        'display_name': user_row['display_name'],
+        'is_admin': user_row['is_admin'],
+        'is_tester': user_row['is_tester'],
+        'auth_provider': user_row['auth_provider'],
+        'class_id': sess_auth.get('class_id', None),
+        'class_name': sess_auth.get('class_name', None),
+        'role_id': sess_auth.get('role_id', None),
+        'role': sess_auth.get('role', None),
+        'class_experiments': [],
+        'other_classes': [],
+    }
+
+    # Fetch experiments for the current class
+    if auth_dict['class_id']:
+        experiment_rows = db.execute("""
+            SELECT experiments.name 
+            FROM experiments 
+            JOIN experiment_class ON experiment_class.experiment_id=experiments.id 
+            WHERE experiment_class.class_id=?
+        """, [auth_dict['class_id']]).fetchall()
+        auth_dict['class_experiments'] = [row['name'] for row in experiment_rows]
+
+    # Admin gets instructor role automatically
+    if auth_dict['is_admin']:
+        auth_dict['role'] = 'instructor'
+
+    return auth_dict
 
 def get_last_class(user_id: int) -> int | None:
     """ Find and return the last class (as a class ID) for the given user,
