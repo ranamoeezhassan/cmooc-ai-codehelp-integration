@@ -257,6 +257,18 @@ def record_response(query_id: int, responses: list[dict[str, str]], texts: dict[
     db.commit()
 
 
+def store_algorea_id(query_id: int, algorea_id: str) -> None:
+    """Store or update the algorea_id for a specific query."""
+    db = get_db()
+    db.execute(
+        """UPDATE queries 
+           SET algorea_id = ? 
+           WHERE id = ?""",
+        [algorea_id, query_id]
+    )
+    db.commit()
+
+
 @bp.route("/request", methods=["POST"])
 @login_required
 @class_enabled_required

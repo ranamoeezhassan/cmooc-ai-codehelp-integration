@@ -9,7 +9,7 @@ from werkzeug.wrappers.response import Response
 from flask_cors import cross_origin
 
 from gened.db import get_db
-from .helper import run_query, get_query
+from .helper import run_query, get_query, store_algorea_id
 from .context import get_context_by_name, record_context_string
 from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
@@ -201,10 +201,17 @@ def submit_query(llm: LLMConfig):
         issue = data.get("issue", "")
         if code is None or error is None or issue is None:
             return jsonify({"error": "Code, Error, or Issue parameters cannot be None"}), 400
-
+            
         # Run query using the formatted context
         query_id = run_query(llm, context, code, error, issue)
         query_row, responses = get_query(query_id)
+
+        algorea_id = data.get("user_id", "no_set_id")
+        if algorea_id == "no_set_id":
+            current_app.logger.debug("No algorea id was provided")
+            print("No algorea id provided, was that intended behavior?")
+        else:
+            store_algorea_id(query_id, algorea_id)
 
         return jsonify({
             "query_id": query_id,
