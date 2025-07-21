@@ -241,6 +241,20 @@ def set_user_class_setting() -> Response:
         db.commit()
         flash("Query counts reset for all students", "success")
 
+    elif 'save_group_prompts' in request.form:
+        num_groups = int(request.form.get('num_groups', 1))
+        prompts = []
+        for i in range(num_groups):
+            prompts.append(request.form.get(f'group_prompt_{i}', ''))
+        # Save to class_group_configs table
+        db.execute("DELETE FROM class_group_configs WHERE class_id=?", [class_id])
+        for i, prompt in enumerate(prompts, start=1):
+            db.execute(
+                "INSERT INTO class_group_configs (class_id, group_num, prompt, num_groups) VALUES (?, ?, ?, ?)",
+                [class_id, i, prompt, num_groups]
+            )
+        db.commit()
+        flash("Group prompts updated successfully", "success")
     return safe_redirect(request.referrer, default_endpoint="profile.main")
 
 

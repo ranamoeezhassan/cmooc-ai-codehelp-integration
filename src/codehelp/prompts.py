@@ -1,3 +1,22 @@
+from flask import current_app
+from gened.db import get_db
+
+def get_group_prompt_for_user(class_id: int, algorea_user_id: int, code: str, error: str, issue: str, context: str | None = None) -> str:
+    db = get_db()
+    # Get total number of groups
+    row = db.execute(
+        "SELECT num_groups FROM class_group_configs WHERE class_id=? LIMIT 1", [class_id]
+    ).fetchone()
+    num_groups = row["num_groups"] if row else 1
+    group_num = (algorea_user_id % num_groups) + 1
+    prompt_row = db.execute(
+        "SELECT prompt FROM class_group_configs WHERE class_id=? AND group_num=?",
+        [class_id, group_num]
+    ).fetchone()
+    prompt_template = prompt_row["prompt"] if prompt_row else ""
+    # Render the prompt using Jinja2
+    return jinja_env.from_string(prompt_template).render(code=code, error=error, issue=issue, context=context)
+
 # SPDX-FileCopyrightText: 2023 Mark Liffiton <liffiton@gmail.com>
 #
 # SPDX-License-Identifier: AGPL-3.0-only
@@ -123,19 +142,30 @@ common_template_user = jinja_env.from_string("""\
 # """)
 
 
-def make_main_prompt(code: str, error: str, issue: str, context: str | None = None) -> list[ChatCompletionMessageParam]:
+def make_main_prompt(code: str, error: str, issue: str, context: str | None = None, class_id: int | None = None, algorea_user_id: int | None = None) -> list[ChatCompletionMessageParam]:
     error = error.rstrip()
     issue = issue.rstrip()
     if error and not issue:
         issue = "Please help me understand this error."
-    # print("Context: ", context)
 
-    sys_job = "to respond to a student's query as a helpful expert teacher"
-    return [
-        {'role': 'system', 'content': common_template_sys1.render(job=sys_job, code=code, error=error, issue=issue, context=context)},
-        {'role': 'user',   'content': common_template_user.render(code=code, error=error, issue=issue)},
-        {'role': 'system', 'content': main_template_sys2.render()},
-    ]
+    # Dynamically load group prompt if class_id and algorea_user_id are provided
+    context_val = context
+    if class_id is not None and algorea_user_id is not None:
+        group_prompt = get_group_prompt_for_user(class_id, algorea_user_id, code, error, issue, context_val)
+        print("Using group prompt in prompts.py:", group_prompt)  # Add this for debugging
+
+        return [
+            {'role': 'system', 'content': group_prompt},
+            {'role': 'user',   'content': common_template_user.render(code=code, error=error, issue=issue)},
+            {'role': 'system', 'content': main_template_sys2.render()},
+        ]
+    else:
+        sys_job = "to respond to a student's query as a helpful expert teacher"
+        return [
+            {'role': 'system', 'content': common_template_sys1.render(job=sys_job, code=code, error=error, issue=issue, context=context_val)},
+            {'role': 'user',   'content': common_template_user.render(code=code, error=error, issue=issue)},
+            {'role': 'system', 'content': main_template_sys2.render()},
+        ]
 
 
 sufficient_template_sys2 = jinja_env.from_string("""\

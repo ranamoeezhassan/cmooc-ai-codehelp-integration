@@ -202,8 +202,36 @@ def submit_query(llm: LLMConfig):
         if code is None or error is None or issue is None:
             return jsonify({"error": "Code, Error, or Issue parameters cannot be None"}), 400
             
-        # Run query using the formatted context
-        query_id = run_query(llm, context, code, error, issue)
+        # Group prompt selection logic
+        db = get_db()
+        class_id = g.auth.get('class_id')
+        group_prompt = None
+        if class_id:
+            # Fetch group config from class_group_configs table
+            rows = db.execute(
+                "SELECT group_num, prompt, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
+                [class_id]
+            ).fetchall()
+            algorea_id = data.get("user_id", None)
+            if rows and algorea_id is not None and str(algorea_id).isdigit():
+                num_groups = rows[0]["num_groups"]
+                group_idx = int(algorea_id) % num_groups if num_groups > 0 else 0
+                prompts = [row["prompt"] for row in rows]
+                if group_idx < len(prompts):
+                    group_prompt = prompts[group_idx]
+
+        # Use group_prompt if available
+        if group_prompt:
+            # Log the group prompt usage
+            current_app.logger.info(f"Using group prompt for group: {group_idx}, prompt: {group_prompt}")
+
+        # Get the algorea_id from request data
+        algorea_id_str = data.get("user_id")
+        algorea_id = int(algorea_id_str) if algorea_id_str and str(algorea_id_str).isdigit() else None
+
+        # Pass both class_id and algorea_id to run_query
+        current_app.logger.debug(f"Passing class_id: {class_id} and algorea_id: {algorea_id} to run_query")
+        query_id = run_query(llm, context, code, error, issue, class_id=class_id, algorea_user_id=algorea_id)
         query_row, responses = get_query(query_id)
 
         algorea_id = data.get("user_id", "no_set_id")
@@ -216,7 +244,8 @@ def submit_query(llm: LLMConfig):
         return jsonify({
             "query_id": query_id,
             "responses": responses,
-            "context": context.name if hasattr(context, 'name') else None
+            "context": context.name if hasattr(context, 'name') else None,
+            "group_prompt": group_prompt
         })
 
     except Exception as e:
