@@ -258,8 +258,51 @@
             </div>
           </div>
         </form>
-  
-  
+
+        <!-- Group Prompt Configuration Section -->
+        <div class="conf_col_sep mt-5 mb-5"></div>
+        <h2 class="title is-size-4">Group Prompt Configuration</h2>
+        <form action="{{ url_for('instructor.set_user_class_setting') }}" method="post">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Number of Groups:</label>
+              <p class="help-text">Set how many groups to divide students into.</p>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <input class="input" type="number" name="num_groups" min="1" max="20" value="{{ class_row.group_config.num_groups if class_row.group_config else 1 }}">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% set num_groups = class_row.group_config.num_groups if class_row.group_config else 1 %}
+          {% for i in range(num_groups) %}
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Group {{ i+1 }} Prompt:</label>
+              {% if i == 0 %}<p class="help-text">Enter a prompt for each group.</p>{% endif %}
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <textarea class="textarea" name="group_prompt_{{i}}">{{ class_row.group_config.prompts[i] if class_row.group_config and class_row.group_config.prompts and i < class_row.group_config.prompts|length else '' }}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          <div class="field is-horizontal">
+            <div class="field-body">
+              <div class="field is-grouped">
+                <div class="control">
+                  <button class="button is-link" type="submit" name="save_group_prompts">Save Group Prompts</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
       </div>
   
       {% if extra_sections %}
@@ -275,5 +318,6 @@
       {% endif %}
   
   </section>
+  </div>
   
   {% endblock %}
