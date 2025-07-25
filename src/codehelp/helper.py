@@ -41,6 +41,8 @@ from .context import (
     get_context_by_name,
     record_context_string,
 )
+from .prompts import get_group_prompt_for_user
+
 
 # Get the model provider from environment variable or default to 'openai'
 provider = os.environ.get('MODEL_PROVIDER', 'openai').lower()
@@ -164,22 +166,22 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | TaskInstruc
     '''
     context_str = context.prompt_str() if context is not None else None
     
-    print(f"[DEBUG] Initial values - class_id: {class_id}, algorea_user_id: {algorea_user_id}")
+    #print(f"[DEBUG] Initial values - class_id: {class_id}, algorea_user_id: {algorea_user_id}")
     
     # Extract IDs from context if not provided
     if class_id is None and hasattr(context, 'class_id'):
         class_id = getattr(context, 'class_id', None)
-        print(f"[DEBUG] After context check - got class_id: {class_id} from context")
+        #print(f"[DEBUG] After context check - got class_id: {class_id} from context")
     if algorea_user_id is None and hasattr(context, 'algorea_user_id'):
         algorea_user_id = getattr(context, 'algorea_user_id', None)
-        print(f"[DEBUG] After context check - got algorea_user_id: {algorea_user_id} from context")
+        #print(f"[DEBUG] After context check - got algorea_user_id: {algorea_user_id} from context")
         
-    print(f"[DEBUG] Final values before make_main_prompt - class_id: {class_id}, algorea_user_id: {algorea_user_id}")
+    #print(f"[DEBUG] Final values before make_main_prompt - class_id: {class_id}, algorea_user_id: {algorea_user_id}")
     
     main_prompt_messages = prompts.make_main_prompt(code, error, issue, context_str, class_id=class_id, algorea_user_id=algorea_user_id)
-    print(f"algorea id here: {algorea_user_id}")
-    print(f"class id: {class_id}")
-    print("Prompt sent to LLM:", main_prompt_messages)
+    # print(f"algorea id here: {algorea_user_id}")
+    # print(f"class id: {class_id}")
+    # print("Prompt sent to LLM:", main_prompt_messages)
     # Launch the "sufficient detail" check concurrently with the main prompt
     task_main = asyncio.create_task(
         get_completion(
@@ -202,8 +204,14 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | TaskInstruc
     responses.append(response_main)
 
     if "```" in response_txt or "should look like" in response_txt or "should look something like" in response_txt:
+        # Extract custom prompt from the DB using class_id and algorea_user_id
+        custom_prompt = ""
+        if class_id is not None and algorea_user_id is not None:
+            # You may need to pass additional arguments as required by your function
+            custom_prompt = get_group_prompt_for_user(class_id, algorea_user_id, code, error, issue, context_str)
+        
         # That's probably too much code. Let's clean it up...
-        cleanup_prompt = prompts.make_cleanup_prompt(response_text=response_txt)
+        cleanup_prompt = prompts.make_cleanup_prompt(response_text=response_txt, custom_instruction=custom_prompt)
         cleanup_response, cleanup_response_txt = await get_completion(
             llm,  # Pass whole llm config
             [{"role" : "user", "content": cleanup_prompt}]
@@ -214,7 +222,6 @@ async def run_query_prompts(llm: LLMConfig, context: ContextConfig | TaskInstruc
     # Check whether there is sufficient information
     response_sufficient, response_sufficient_txt = await task_sufficient
     responses.append(response_sufficient)
-
     if 'error' in response_main:
         return responses, {'error': response_txt}
     elif response_sufficient_txt.endswith("OK") or "OK." in response_sufficient_txt or "```" in response_sufficient_txt or "is sufficient for me" in response_sufficient_txt or response_sufficient_txt.startswith("Error ("):
@@ -308,7 +315,7 @@ def help_request(llm: LLMConfig) -> Response: # type: ignore
     class_id = int(class_id_str) if class_id_str else None
     algorea_user_id = int(algorea_user_id_str) if algorea_user_id_str else None
     
-    print(f"We are getting class id {class_id} (from {class_id_str}) and algorea id: {algorea_user_id} (from {algorea_user_id_str})")
+    # print(f"We are getting class id {class_id} (from {class_id_str}) and algorea id: {algorea_user_id} (from {algorea_user_id_str})")
 
     # TODO: limit length of code/error/issue
 

@@ -152,12 +152,14 @@ def make_main_prompt(code: str, error: str, issue: str, context: str | None = No
     context_val = context
     if class_id is not None and algorea_user_id is not None:
         group_prompt = get_group_prompt_for_user(class_id, algorea_user_id, code, error, issue, context_val)
-        print("Using group prompt in prompts.py:", group_prompt)  # Add this for debugging
+        system_content = (
+            main_template_sys2.render() +
+            f"\n\nIMPORTANT: In your response, you MUST {group_prompt} (do not skip this step, even if it seems unrelated)."
+        )
 
         return [
-            {'role': 'system', 'content': group_prompt},
-            {'role': 'user',   'content': common_template_user.render(code=code, error=error, issue=issue)},
-            {'role': 'system', 'content': main_template_sys2.render()},
+        {'role': 'system', 'content': system_content},
+        {'role': 'user',   'content': common_template_user.render(code=code, error=error, issue=issue)},
         ]
     else:
         sys_job = "to respond to a student's query as a helpful expert teacher"
@@ -191,14 +193,29 @@ def make_sufficient_prompt(code: str, error: str, issue: str, context: str | Non
     ]
 
 
-def make_cleanup_prompt(response_text: str) -> str:
-    return f"""The following was written to help a student in a CS class. However, any example code (such as in ``` Markdown delimiters) can give the student an assignment's answer rather than help them figure it out themselves. We need to provide help without including example code. To do this, rewrite the following to remove any code blocks so that the response explains what the student should do but does not provide solution code. Remove any use salutations such as Dear [student], [student name]. Do not leave any signatures in the message at the end of message for example such as Best Regards, etc.
----
-{response_text}
----
-Rewritten:
-"""
+# def make_cleanup_prompt(response_text: str) -> str:
+#     return f"""The following was written to help a student in a CS class. However, any example code (such as in ``` Markdown delimiters) can give the student an assignment's answer rather than help them figure it out themselves. We need to provide help without including example code. To do this, rewrite the following to remove any code blocks so that the response explains what the student should do but does not provide solution code. 
+# ---
+# {response_text}
+# ---
+# Rewritten:
+# """
 
+def make_cleanup_prompt(response_text: str, custom_instruction: str = "") -> str:
+    """
+    Build a prompt for the LLM to rewrite a response, preserving the custom group instruction if provided.
+    """
+    prompt = (
+        "The following was written to help a student in a CS class. "
+        "However, any example code (such as in ``` Markdown delimiters) can give the student an assignment's answer rather than help them figure it out themselves. "
+        "We need to provide help without including example code. To do this, rewrite the following to remove any code blocks so that the response explains what the student should do but does not provide solution code. "
+    )
+    if custom_instruction:
+        prompt += (
+            f"\n\nIMPORTANT: At the end of your rewritten response, you MUST follow the instructions provided here (do not skip this step, even if it seems unrelated):\n{custom_instruction}\n"
+        )
+    prompt += f"\n---\n{response_text}\n---\nRewritten:\n"
+    return prompt
 
 def make_topics_prompt(code: str, error: str, issue: str, context: str | None, response_text: str) -> list[ChatCompletionMessageParam]:
     messages : list[ChatCompletionMessageParam] = [
