@@ -10,11 +10,11 @@ from flask_cors import cross_origin
 
 from gened.db import get_db
 from .helper import run_query, get_query, store_algorea_id
-from .context import get_context_by_name, record_context_string
-from gened.auth import login_required, class_enabled_required, get_auth, set_session_auth_user, set_session_auth_class, get_last_class
+from .context import get_context_by_name
+from gened.auth import class_enabled_required, set_session_auth_user, set_session_auth_class, get_last_class
 from gened.dartmouth import LLMConfig, with_llm
 from gened.classes import switch_class
-from .context import get_context_by_name, ContextConfig, TaskInstructions, get_available_contexts
+from .context import get_context_by_name, TaskInstructions, get_available_contexts
 
 bp = Blueprint('api', __name__)
 SECRET_KEY = os.environ.get("SECRET_KEY")

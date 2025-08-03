@@ -4,15 +4,10 @@
 
 from pathlib import Path
 from typing import Any
-
 from flask.app import Flask
-
 from gened import base
-
 from . import admin, context_config, helper, tutor
-
 import os
-from dotenv import find_dotenv, load_dotenv
 from . import api
 from .commands import register_commands
 

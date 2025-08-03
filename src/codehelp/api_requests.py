@@ -1,7 +1,6 @@
 import requests
 import os
 from dotenv import load_dotenv
-from urllib3 import Retry
 
 def get_access_token(username, password):
     """Get access token from API with improved error handling."""
