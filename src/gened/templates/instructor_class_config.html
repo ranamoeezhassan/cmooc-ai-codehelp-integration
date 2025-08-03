@@ -5,7 +5,6 @@
   #}
   
   {% extends "base.html" %}
-  
   {% block body %}
   <style type="text/css">
   .section {
@@ -36,6 +35,34 @@
     margin: 0.5rem;
     margin-top: 0.8rem;
   }
+
+  .tooltip {
+    visibility: hidden;
+    opacity: 0;
+    background: #363636;
+    color: #fff;
+    border-radius: 4px;
+    padding: 2px 8px;
+    position: absolute;
+    left: 50%;
+    top: -2em;
+    transform: translateX(-50%);
+    transition: opacity 0.2s;
+    font-size: 0.9em;
+    z-index: 10;
+  }
+  .tag.is-info:hover .tooltip,
+  .tag.is-info .tooltip.show {
+    visibility: visible;
+    opacity: 1;
+  }
+  .is-hidden {
+    display: none;
+  }
+  .tag.is-info {
+  cursor: pointer;
+  position: relative;
+}
   </style>
   <section class="section">
     <h1 class="title">{{ auth['class_name'] }} Configuration</h1>
@@ -263,6 +290,20 @@
         <div class="conf_col_sep mt-5 mb-5"></div>
         <h2 class="title is-size-4">Group Prompt Configuration</h2>
         <form action="{{ url_for('instructor.set_user_class_setting') }}" method="post">
+          <div class="field">
+            <label class="label">Prompt Tags:</label>
+            <div>
+              <span class="tag is-info" onclick="copyToClipboard(this, 1, 'Explain your reasoning.')">
+                Boilerplate
+                <span class="tooltip is-hidden">Copied!</span>
+              </span>
+              <span class="tag is-info" onclick="copyToClipboard(this, 2, 'Do not provide code.')">
+                No Code
+                <span class="tooltip is-hidden">Copied!</span>
+              </span>
+              <!-- Add more tags as needed -->
+            </div>
+          </div>
           <div class="field is-horizontal">
             <div class="field-label is-normal">
               <label class="label">Number of Groups:</label>
@@ -320,4 +361,20 @@
   </section>
   </div>
   
+
+  <script>
+  function copyToClipboard(el, tag_name, tag_text) {
+    navigator.clipboard.writeText(tag_text);
+    // Show tooltip
+    const tooltip = el.querySelector('.tooltip');
+    if (tooltip) {
+      tooltip.classList.remove('is-hidden');
+      tooltip.classList.add('show');
+      setTimeout(() => {
+        tooltip.classList.remove('show');
+        tooltip.classList.add('is-hidden');
+      }, 1200);
+    }
+  }
+  </script>
   {% endblock %}
