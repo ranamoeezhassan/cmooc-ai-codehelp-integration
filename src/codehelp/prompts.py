@@ -77,10 +77,11 @@ def make_main_prompt(code: str, error: str, issue: str, context: str | None = No
     context_val = context
     if class_id is not None and algorea_user_id is not None:
         group_prompt = get_group_prompt_for_user(class_id, algorea_user_id, code, error, issue, context_val)
-        system_content = (
-            main_template_sys2.render() +
-            f"\n\nIMPORTANT: In your response, you MUST {group_prompt} (do not skip this step, even if it seems unrelated)."
-        )
+        # system_content = (
+        #     main_template_sys2.render() +
+        #     f"\n\nIMPORTANT: In your response, you MUST {group_prompt} (do not skip this step, even if it seems unrelated)."
+        # )
+        system_content = ( group_prompt )
 
         return [
         {'role': 'system', 'content': system_content},
