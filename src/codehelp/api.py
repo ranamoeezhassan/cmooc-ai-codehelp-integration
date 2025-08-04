@@ -1,3 +1,4 @@
+
 import json
 from flask import Blueprint, current_app, jsonify, request, g
 from functools import wraps
@@ -392,3 +393,88 @@ def switch_active_class(class_id):
         "role_id": g.auth['role_id'],
         "other_classes": g.auth['other_classes']
     })
+
+@bp.route("/api/prompt_tags", methods=["GET"])
+def get_prompt_tags():
+    """Get all prompt tags for the current class. No auth required."""
+    class_id = request.args.get('class_id', type=int)
+    if not class_id:
+        # fallback: try to get from first class in db
+        db = get_db()
+        row = db.execute("SELECT id FROM classes ORDER BY id LIMIT 1").fetchone()
+        class_id = row["id"] if row else None
+    if not class_id:
+        return jsonify({"error": "No class selected."}), 400
+    db = get_db()
+    rows = db.execute("SELECT id, name, text FROM prompt_tags WHERE class_id = ? ORDER BY name", [class_id]).fetchall()
+    tags = [{"id": row["id"], "name": row["name"], "text": row["text"]} for row in rows]
+    return jsonify({"tags": tags})
+
+@bp.route("/api/prompt_tags", methods=["POST"])
+def create_prompt_tag():
+    """Create a new prompt tag for the current class. No auth required."""
+    class_id = request.args.get('class_id', type=int)
+    if not class_id:
+        db = get_db()
+        row = db.execute("SELECT id FROM classes ORDER BY id LIMIT 1").fetchone()
+        class_id = row["id"] if row else None
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    text = data.get('text', '').strip()
+    if not class_id or not name or not text:
+        return jsonify({"error": "Class, name, and text are required."}), 400
+    db = get_db()
+    try:
+        db.execute("INSERT INTO prompt_tags (class_id, name, text) VALUES (?, ?, ?)", [class_id, name, text])
+        db.commit()
+        return jsonify({"message": "Tag created."}), 201
+    except db.IntegrityError:
+        db.rollback()
+        return jsonify({"error": "Tag name must be unique for this class."}), 409
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/prompt_tags/<int:tag_id>", methods=["PUT"])
+def update_prompt_tag(tag_id):
+    """Update a prompt tag by id. No auth required."""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    text = data.get('text', '').strip()
+    if not name or not text:
+        return jsonify({"error": "Name and text are required."}), 400
+    db = get_db()
+    try:
+        result = db.execute("UPDATE prompt_tags SET name=?, text=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", [name, text, tag_id])
+        if result.rowcount == 0:
+            return jsonify({"error": "Tag not found."}), 404
+        db.commit()
+        return jsonify({"message": "Tag updated."})
+    except db.IntegrityError:
+        db.rollback()
+        return jsonify({"error": "Tag name must be unique for this class."}), 409
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/prompt_tags/<int:tag_id>", methods=["DELETE"])
+def delete_prompt_tag(tag_id):
+    """Delete a prompt tag by id. No auth required."""
+    import time
+    db = get_db()
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            result = db.execute("DELETE FROM prompt_tags WHERE id=?", [tag_id])
+            if result.rowcount == 0:
+                return jsonify({"error": "Tag not found."}), 404
+            db.commit()
+            return jsonify({"message": "Tag deleted."})
+        except Exception as e:
+            if 'database is locked' in str(e) and attempt < max_retries - 1:
+                print(f"DB locked on delete, retrying ({attempt+1}/{max_retries})...")
+                time.sleep(0.5)
+                continue
+            print(f'Error deleting prompt tag {tag_id}: {e}')
+            db.rollback()
+            return jsonify({"error": str(e)}), 500
