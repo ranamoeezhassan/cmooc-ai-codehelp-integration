@@ -58,13 +58,14 @@ def config_form() -> str:
 
     # Load group configuration from class_group_configs table
     rows = db.execute(
-        "SELECT group_num, prompt, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
+        "SELECT group_num, expanded, raw, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
         [class_id]
     ).fetchall()
     if rows:
         num_groups = rows[0]["num_groups"]
-        prompts = [row["prompt"] for row in rows]
-        group_config = {"num_groups": num_groups, "prompts": prompts}
+        prompts = [row["expanded"] for row in rows]  # Changed from row["prompt"] 
+        prompts_raw = [row["raw"] for row in rows]   # Add this for raw prompts
+        group_config = {"num_groups": num_groups, "prompts": prompts, "prompts_raw": prompts_raw}
     else:
         group_config = None
 

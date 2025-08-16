@@ -159,10 +159,10 @@ def get_group_prompt_for_user(class_id: int, algorea_user_id: int, code: str, er
     num_groups = row["num_groups"] if row else 1
     group_num = (algorea_user_id % num_groups) + 1
     prompt_row = db.execute(
-        "SELECT prompt FROM class_group_configs WHERE class_id=? AND group_num=?",
+        "SELECT expanded FROM class_group_configs WHERE class_id=? AND group_num=?",  # Changed from "prompt"
         [class_id, group_num]
     ).fetchone()
-    prompt_template = prompt_row["prompt"] if prompt_row else ""
+    prompt_template = prompt_row["expanded"] if prompt_row else ""  # Changed from ["prompt"]
     # Render the prompt using Jinja2
     return jinja_env.from_string(prompt_template).render(code=code, error=error, issue=issue, context=context)
 

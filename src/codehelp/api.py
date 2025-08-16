@@ -210,14 +210,14 @@ def submit_query(llm: LLMConfig):
         if class_id:
             # Fetch group config from class_group_configs table
             rows = db.execute(
-                "SELECT group_num, prompt, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
+                "SELECT group_num, expanded, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
                 [class_id]
             ).fetchall()
             algorea_id = data.get("user_id", None)
             if rows and algorea_id is not None and str(algorea_id).isdigit():
                 num_groups = rows[0]["num_groups"]
                 group_idx = int(algorea_id) % num_groups if num_groups > 0 else 0
-                prompts = [row["prompt"] for row in rows]
+                prompts = [row["expanded"] for row in rows]  # Changed from row["prompt"]
                 if group_idx < len(prompts):
                     group_prompt = prompts[group_idx]
 

@@ -332,12 +332,21 @@
           <div class="field is-horizontal">
             <div class="field-label is-normal">
               <label class="label">Group {{ i+1 }} Prompt:</label>
-              {% if i == 0 %}<p class="help-text">Enter a prompt for each group.</p>{% endif %}
+              {% if i == 0 %}<p class="help-text">Enter a prompt for each group. You can use tags by typing <code>{{'[[tag_name]]'}}</code> anywhere in the text. The preview box will show the expanded prompt, and this expanded version will be submitted.</p>{% endif %}
             </div>
             <div class="field-body">
               <div class="field">
                 <div class="control">
-                  <textarea class="textarea" name="group_prompt_{{i}}">{{ class_row.group_config.prompts[i] if class_row.group_config and class_row.group_config.prompts and i < class_row.group_config.prompts|length else '' }}</textarea>
+                  <!-- In your template, update the textarea to include a data attribute with the saved value -->
+                  <!-- Update the textarea to preserve the original text with tags -->
+                  <textarea class="textarea group-prompt-input" rows="4" 
+                            data-saved-value="{{ class_row.group_config.prompts_raw[i] if class_row.group_config and class_row.group_config.prompts_raw and i < class_row.group_config.prompts_raw|length else (class_row.group_config.prompts[i] if class_row.group_config and class_row.group_config.prompts and i < class_row.group_config.prompts|length else '') }}">{{ class_row.group_config.prompts_raw[i] if class_row.group_config and class_row.group_config.prompts_raw and i < class_row.group_config.prompts_raw|length else (class_row.group_config.prompts[i] if class_row.group_config and class_row.group_config.prompts and i < class_row.group_config.prompts|length else '') }}</textarea>
+                  <!-- Hidden input for the expanded text -->
+                  <input type="hidden" name="group_prompt_{{i}}" value="">
+                  <!-- Hidden input for the raw text with tags -->
+                  <input type="hidden" name="group_prompt_raw_{{i}}" value="">
+<!-- <textarea class="textarea group-prompt-input" name="group_prompt_{{i}}" rows="4">{{ class_row.group_config.prompts[i] if class_row.group_config and class_row.group_config.prompts and i < class_row.group_config.prompts|length else '' }}</textarea> -->
+                  <div class="box mt-2 group-prompt-preview" style="background:#f8f8ff; min-height:80px;"></div>
                 </div>
               </div>
             </div>
@@ -370,161 +379,210 @@
   </section>
   </div>
 
-  <script>
-  // Prompt tag management
-  let tags = [];
-  let editingIdx = null;
-  let editingTagId = null;
+  <!-- <script src="/static/instructor_class_config.js"></script> -->
+   <script>
+    // Prompt tag management
+    let tags = [];
+    let editingIdx = null;
+    let editingTagId = null;
 
-  async function loadTags() {
-    try {
-      const resp = await fetch('/api/prompt_tags');
-      const data = await resp.json();
-      tags = data.tags || [];
-      renderTags();
-    } catch (e) {
-      tags = [];
-      renderTags();
-    }
-  }
-
-function renderTags() {
-  const container = document.getElementById('prompt-tags');
-  container.innerHTML = '';
-  tags.forEach((tag, idx) => {
-    const tagEl = document.createElement('span');
-    tagEl.className = 'tag is-info mr-2 mb-2';
-    tagEl.style.cursor = 'pointer';
-    tagEl.title = 'Copy Tag Text'
-    tagEl.addEventListener('click', (e) => {
-      // Only copy if not clicking a button
-      if (e.target === tagEl) {
-        copyToClipboard(tagEl, tag.text);
+    async function loadTags() {
+      try {
+        const resp = await fetch('/api/prompt_tags');
+        const data = await resp.json();
+        tags = data.tags || [];
+        renderTags();
+      } catch (e) {
+        tags = [];
+        renderTags();
       }
+      
+      // After tags are loaded, attach preview logic to all group prompt inputs
+      document.querySelectorAll('.group-prompt-input').forEach((textarea, idx) => {
+        const preview = document.querySelectorAll('.group-prompt-preview')[idx];
+        
+        // Restore saved value to textarea (important for after form submission)
+        const savedValue = textarea.getAttribute('data-saved-value') || '';
+        if (savedValue && !textarea.value) {
+          textarea.value = savedValue;
+        }
+        
+        // Find the existing hidden input (created by template) or create one
+        let hiddenInput = document.querySelector(`input[name="group_prompt_${idx}"]`);
+        if (!hiddenInput) {
+          hiddenInput = document.createElement('input');
+          hiddenInput.type = 'hidden';
+          hiddenInput.name = `group_prompt_${idx}`;
+          textarea.parentNode.appendChild(hiddenInput);
+        }
+
+        function updatePreviewBox() {
+          const text = textarea.value;
+          let expanded = text.replace(/\[\[(.*?)\]\]/g, (match, tagName) => {
+            const tag = tags.find(t => t.name.trim().toLowerCase() === tagName.trim().toLowerCase());
+            return tag ? tag.text : match;
+          });
+          preview.innerText = expanded;
+          hiddenInput.value = expanded; // Expanded text for queries
+          
+          // Also save the raw text with tags
+          let rawInput = document.querySelector(`input[name="group_prompt_raw_${idx}"]`);
+          if (!rawInput) {
+            rawInput = document.createElement('input');
+            rawInput.type = 'hidden';
+            rawInput.name = `group_prompt_raw_${idx}`;
+            textarea.parentNode.appendChild(rawInput);
+          }
+          rawInput.value = text; // Original text with tags
+          
+          console.log(`Updated group ${idx} - Raw: ${text}, Expanded: ${expanded}`);
+        }
+        
+        textarea.addEventListener('input', updatePreviewBox);
+        // Initial preview to show current content
+        updatePreviewBox();
+      });
+    }
+
+  function renderTags() {
+    const container = document.getElementById('prompt-tags');
+    container.innerHTML = '';
+    tags.forEach((tag, idx) => {
+      const tagEl = document.createElement('span');
+      tagEl.className = 'tag is-info mr-2 mb-2';
+      tagEl.style.cursor = 'pointer';
+      tagEl.title = 'Copy Tag Text'
+      tagEl.addEventListener('click', (e) => {
+        // Only copy if not clicking a button
+        if (e.target === tagEl) {
+          copyToClipboard(tagEl, tag.text);
+        }
+      });
+
+      // Tag name
+      tagEl.append(document.createTextNode(tag.name + ' '));
+
+      // Tooltip
+      const tooltip = document.createElement('span');
+      tooltip.className = 'tooltip is-hidden';
+      tooltip.textContent = 'Copied!';
+      tagEl.appendChild(tooltip);
+
+      // Delete button
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete is-small ml-2';
+      delBtn.type = 'button';
+      delBtn.title = 'Delete tag'
+      delBtn.addEventListener('click', (event) => {
+        deleteTag(idx, event);
+      });
+      tagEl.appendChild(delBtn);
+
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'button is-small is-white ml-2';
+      editBtn.type = 'button';
+      editBtn.style.padding = '6px 6px';
+      editBtn.style.border = 'none';
+      editBtn.style.background = 'white';
+      editBtn.style.verticalAlign = 'middle';
+      editBtn.title = 'Edit tag';
+      editBtn.innerHTML = '<span class="icon is-small"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"><path stroke="#3273dc" stroke-width="2" d="M16.5 4.5l3 3m-2.121-2.121a2.121 2.121 0 1 1 3 3L7.5 21H4.5v-3L17.379 5.379z"/></svg></span>';
+      editBtn.addEventListener('click', (event) => {
+        editTag(idx, event);
+      });
+      tagEl.appendChild(editBtn);
+
+      container.appendChild(tagEl);
     });
+  }
 
-    // Tag name
-    tagEl.append(document.createTextNode(tag.name + ' '));
+    function copyToClipboard(el, tag_text) {
+      navigator.clipboard.writeText(tag_text);
+      const tooltip = el.querySelector('.tooltip');
+      if (tooltip) {
+        tooltip.classList.remove('is-hidden');
+        tooltip.classList.add('show');
+        setTimeout(() => {
+          tooltip.classList.remove('show');
+          tooltip.classList.add('is-hidden');
+        }, 1200);
+      }
+    }
 
-    // Tooltip
-    const tooltip = document.createElement('span');
-    tooltip.className = 'tooltip is-hidden';
-    tooltip.textContent = 'Copied!';
-    tagEl.appendChild(tooltip);
+    function showAddTagModal() {
+      editingIdx = null;
+      editingTagId = null;
+      document.getElementById('tag-name').value = '';
+      document.getElementById('tag-text').value = '';
+      document.getElementById('tag-modal').classList.add('is-active');
+    }
 
-    // Delete button
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete is-small ml-2';
-    delBtn.type = 'button';
-    delBtn.title = 'Delete tag'
-    delBtn.addEventListener('click', (event) => {
-      deleteTag(idx, event);
-    });
-    tagEl.appendChild(delBtn);
+    function closeTagModal() {
+      document.getElementById('tag-modal').classList.remove('is-active');
+    }
 
-    // Edit button
-    const editBtn = document.createElement('button');
-    editBtn.className = 'button is-small is-white ml-2';
-    editBtn.type = 'button';
-    editBtn.style.padding = '6px 6px';
-    editBtn.style.border = 'none';
-    editBtn.style.background = 'white';
-    editBtn.style.verticalAlign = 'middle';
-    editBtn.title = 'Edit tag';
-    editBtn.innerHTML = '<span class="icon is-small"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"><path stroke="#3273dc" stroke-width="2" d="M16.5 4.5l3 3m-2.121-2.121a2.121 2.121 0 1 1 3 3L7.5 21H4.5v-3L17.379 5.379z"/></svg></span>';
-    editBtn.addEventListener('click', (event) => {
-      editTag(idx, event);
-    });
-    tagEl.appendChild(editBtn);
+    async function saveTag() {
+      const name = document.getElementById('tag-name').value.trim();
+      const text = document.getElementById('tag-text').value.trim();
+      if (!name || !text) return;
+      if (editingIdx !== null && editingTagId !== null) {
+        // Update existing tag
+        try {
+          const resp = await fetch(`/api/prompt_tags/${editingTagId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, text})
+          });
+          if (resp.ok) {
+            await loadTags();
+          }
+        } catch (e) {}
+      } else {
+        // Create new tag
+        try {
+          const resp = await fetch('/api/prompt_tags', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, text})
+          });
+          if (resp.ok) {
+            await loadTags();
+          }
+        } catch (e) {}
+      }
+      closeTagModal();
+    }
 
-    container.appendChild(tagEl);
+    async function deleteTag(idx, event) {
+      event.stopPropagation();
+      if (confirm('Delete this tag?')) {
+        const tag = tags[idx];
+        try {
+          const resp = await fetch(`/api/prompt_tags/${tag.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (resp.ok) {
+            await loadTags();
+          }
+        } catch (e) {}
+      }
+    }
+
+    function editTag(idx, event) {
+      event.stopPropagation();
+      editingIdx = idx;
+      editingTagId = tags[idx].id;
+      document.getElementById('tag-name').value = tags[idx].name;
+      document.getElementById('tag-text').value = tags[idx].text;
+      document.getElementById('tag-modal').classList.add('is-active');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTags();
   });
-}
 
-  function copyToClipboard(el, tag_text) {
-    navigator.clipboard.writeText(tag_text);
-    const tooltip = el.querySelector('.tooltip');
-    if (tooltip) {
-      tooltip.classList.remove('is-hidden');
-      tooltip.classList.add('show');
-      setTimeout(() => {
-        tooltip.classList.remove('show');
-        tooltip.classList.add('is-hidden');
-      }, 1200);
-    }
-  }
+   </script>
 
-  function showAddTagModal() {
-    editingIdx = null;
-    editingTagId = null;
-    document.getElementById('tag-name').value = '';
-    document.getElementById('tag-text').value = '';
-    document.getElementById('tag-modal').classList.add('is-active');
-  }
-
-  function closeTagModal() {
-    document.getElementById('tag-modal').classList.remove('is-active');
-  }
-
-  async function saveTag() {
-    const name = document.getElementById('tag-name').value.trim();
-    const text = document.getElementById('tag-text').value.trim();
-    if (!name || !text) return;
-    if (editingIdx !== null && editingTagId !== null) {
-      // Update existing tag
-      try {
-        const resp = await fetch(`/api/prompt_tags/${editingTagId}`, {
-          method: 'PUT',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({name, text})
-        });
-        if (resp.ok) {
-          await loadTags();
-        }
-      } catch (e) {}
-    } else {
-      // Create new tag
-      try {
-        const resp = await fetch('/api/prompt_tags', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({name, text})
-        });
-        if (resp.ok) {
-          await loadTags();
-        }
-      } catch (e) {}
-    }
-    closeTagModal();
-  }
-
-  async function deleteTag(idx, event) {
-    event.stopPropagation();
-    if (confirm('Delete this tag?')) {
-      const tag = tags[idx];
-      try {
-        const resp = await fetch(`/api/prompt_tags/${tag.id}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        if (resp.ok) {
-          await loadTags();
-        }
-      } catch (e) {}
-    }
-  }
-
-  function editTag(idx, event) {
-    event.stopPropagation();
-    editingIdx = idx;
-    editingTagId = tags[idx].id;
-    document.getElementById('tag-name').value = tags[idx].name;
-    document.getElementById('tag-text').value = tags[idx].text;
-    document.getElementById('tag-modal').classList.add('is-active');
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    loadTags();
-  });
-  </script>
   {% endblock %}
