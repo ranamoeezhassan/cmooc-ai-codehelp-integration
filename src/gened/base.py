@@ -129,27 +129,33 @@ def create_app_base(import_name: str, app_config: dict[str, Any], instance_path:
         NAVBAR_ITEM_TEMPLATES=[],
     )
 
-    # Add vars set in .env, loaded by load_dotenv() above, to config dictionary.
-    # Required variables:
-    #  - SECRET_KEY: used by Flask to sign session cookies
-    #  - OPENAI_API_KEY: the "system" API key used in certain situations
-    #  - SYSTEM_MODEL: OpenAI model string used for 'system' completions
-    #  - DEFAULT_CLASS_MODEL_SHORTNAME: shortname of model to use as default for new classes
-    #    (see models table in db)
-    # for varname in ["SECRET_KEY", "OPENAI_API_KEY", "SYSTEM_MODEL", "DEFAULT_CLASS_MODEL_SHORTNAME"]:
-    #     try:
-    #         env_var = os.environ[varname]
-    #         base_config[varname] = env_var
-    #         print(f'Loaded in environment variable = {env_var}')
-    #     except KeyError:
-    #         app.logger.error(f"{varname} environment variable not set.")
-    #         sys.exit(1)
-
-    for varname in ["SECRET_KEY", "SYSTEM_MODEL", "DEFAULT_CLASS_MODEL_SHORTNAME", "DARTMOUTH_API_KEY"]:
+    for varname in ["SECRET_KEY", "SYSTEM_MODEL", "DEFAULT_CLASS_MODEL_SHORTNAME"]:
         try:
             env_var = os.environ[varname]
             base_config[varname] = env_var
-            # print(f'Loaded in environment variable = {env_var}')
+            print(f'Loaded in environment variable = {env_var}')
+        except KeyError:
+            app.logger.error(f"{varname} environment variable not set.")
+            sys.exit(1)
+
+    # Load provider-specific API keys based on MODEL_PROVIDER
+    model_provider = os.environ.get('MODEL_PROVIDER', 'openai').lower()
+    if model_provider == 'openai':
+        required_keys = ["OPENAI_API_KEY"]
+    elif model_provider == 'mistral':
+        required_keys = ["MISTRAL_API_KEY"]
+    elif model_provider == 'dartmouth':
+        required_keys = ["DARTMOUTH_API_KEY"]
+    elif model_provider == 'gemini':
+        required_keys = ["GEMINI_API_KEY"]
+    else:
+        app.logger.error(f"Unsupported MODEL_PROVIDER: {model_provider}")
+        sys.exit(1)
+    for varname in required_keys:
+        try:
+            env_var = os.environ[varname]
+            base_config[varname] = env_var
+            print(f'Loaded in environment variable = {env_var}')
         except KeyError:
             app.logger.error(f"{varname} environment variable not set.")
             sys.exit(1)

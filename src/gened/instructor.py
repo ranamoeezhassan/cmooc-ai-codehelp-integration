@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 import datetime as dt
+import json
 from sqlite3 import Row
 
 from flask import (
@@ -241,6 +242,26 @@ def set_user_class_setting() -> Response:
         db.commit()
         flash("Query counts reset for all students", "success")
 
+    elif 'save_group_prompts' in request.form:
+        form = request.form
+        num_groups = int(form.get('num_groups', 1))
+        
+        # Clear existing group configs
+        db.execute("DELETE FROM class_group_configs WHERE class_id=?", [class_id])
+        
+        # Save both raw and expanded versions in single rows
+        for i in range(num_groups):
+            expanded = form.get(f'group_prompt_{i}', '')
+            raw = form.get(f'group_prompt_raw_{i}', '')
+            
+            # Save both expanded and raw in the same row
+            db.execute(
+                "INSERT INTO class_group_configs (class_id, group_num, expanded, raw, num_groups) VALUES (?, ?, ?, ?, ?)",
+                [class_id, i+1, expanded, raw, num_groups]
+            )
+        
+        db.commit()
+        flash("Group prompts saved successfully!", "success")
     return safe_redirect(request.referrer, default_endpoint="profile.main")
 
 

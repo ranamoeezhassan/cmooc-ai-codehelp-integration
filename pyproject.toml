@@ -35,7 +35,9 @@ dependencies = [
     "pytz",
     "pyjwt",
     "mistralai",
-    "flask-cors"
+    "flask-cors",
+    "google-genai",
+    "google-generativeai"
 ]
 
 [project.optional-dependencies]

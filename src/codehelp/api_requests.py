@@ -1,7 +1,6 @@
 import requests
 import os
 from dotenv import load_dotenv
-from urllib3 import Retry
 
 def get_access_token(username, password):
     """Get access token from API with improved error handling."""
@@ -41,12 +40,13 @@ def get_access_token(username, password):
         print(f"Unexpected error: {e}")
         raise
 
-def submit_query(access_token: str, code: str, error: str, issue: str, context=None, task_instructions=None):
+def submit_query(access_token: str, code: str, error: str, issue: str, algorea_id: str = None, context=None, task_instructions=None):
     """Submit a query with improved error handling and debugging."""
     data = {
         "code": code,
         "error": error,
-        "issue": issue
+        "issue": issue,
+        "user_id": algorea_id,
     }
     if context is not None:
         data["context"] = context

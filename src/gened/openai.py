@@ -31,43 +31,36 @@ class NoTokensError(Exception):
 
 @dataclass(frozen=True)
 class LLMConfig:
-    client: AsyncOpenAI
     model: str
+    api_key: str | None = None
+    base_url: str | None = None
     tokens_remaining: int | None = None  # None if current user is not using tokens
 
 
 def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
     ''' Get model details and an initialized OpenAI client based on the
     arguments and the current user and class.
-
-    Procedure, depending on arguments, user, and class:
-      1) If use_system_key is True, the system API key is always used with no checks.
-      2) If there is a current class, and it is enabled, then its model+API key is used:
-         a) LTI class config is in the linked LTI consumer.
-         b) User class config is in the user class.
-         c) If there is a current class but it is disabled or has no key, raise an error.
-      3) If the user is a local-auth user, the system API key and model is used.
-      4) Otherwise, we use tokens and the system API key / model.
-           If spend_token is True, the user must have 1 or more tokens remaining.
-             If they have 0 tokens, raise an error.
-             Otherwise, their token count is decremented.
-
-    Returns:
-      LLMConfig with an OpenAI client and model name.
-
-    Raises various exceptions in cases where a key and model are not available.
     '''
     db = get_db()
 
     def make_system_client(tokens_remaining: int | None = None) -> LLMConfig:
-        """ Factory function to initialize a default client (using the system key)
-            only if/when needed.
-        """
         system_model = current_app.config["SYSTEM_MODEL"]
-        system_key = current_app.config["OPENAI_API_KEY"]
+        model_provider = current_app.config.get('MODEL_PROVIDER', 'openai').lower()
+        if model_provider == 'openai':
+            system_key = current_app.config["OPENAI_API_KEY"]
+            base_url = "https://api.openai.com/v1"
+        elif model_provider == 'dartmouth':
+            system_key = current_app.config["DARTMOUTH_API_KEY"]
+            base_url = current_app.config.get('BASE_URL', 'https://api.dartmouth.edu')
+            if not base_url.endswith('/v1'):
+                base_url = base_url.rstrip('/') + '/v1'
+        else:
+            system_key = current_app.config["OPENAI_API_KEY"]
+            base_url = "https://api.openai.com/v1"
         return LLMConfig(
-            client=AsyncOpenAI(api_key=system_key),
             model=system_model,
+            api_key=system_key,
+            base_url=base_url,
             tokens_remaining=tokens_remaining,
         )
 
@@ -81,7 +74,7 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
         class_row = db.execute("""
             SELECT
                 classes.enabled,
-                COALESCE(consumers.openai_key, classes_user.openai_key) AS openai_key,
+                COALESCE(consumers.dartmouth_key, classes_user.dartmouth_key) AS api_key,
                 COALESCE(consumers.model_id, classes_user.model_id) AS _model_id,
                 models.model
             FROM classes
@@ -99,41 +92,27 @@ def _get_llm(*, use_system_key: bool, spend_token: bool) -> LLMConfig:
         if not class_row['enabled']:
             raise ClassDisabledError
 
-        if not class_row['openai_key']:
+        if not class_row['api_key']:
             raise NoKeyFoundError
 
-        api_key = class_row['openai_key']
+        api_key = class_row['api_key']
+        
+        # Determine base URL based on MODEL_PROVIDER
+        model_provider = current_app.config.get('MODEL_PROVIDER', 'openai').lower()
+        if model_provider == 'openai':
+            base_url = "https://api.openai.com/v1"
+        elif model_provider == 'dartmouth':
+            base_url = current_app.config.get('BASE_URL', 'https://api.dartmouth.edu')
+            if not base_url.endswith('/v1'):
+                base_url = base_url.rstrip('/') + '/v1'
+        else:
+            base_url = "https://api.openai.com/v1"
+        
         return LLMConfig(
-            client=AsyncOpenAI(api_key=api_key),
             model=class_row['model'],
+            api_key=api_key,
+            base_url=base_url,
         )
-
-    # Get user data for tokens, auth_provider
-    user_row = db.execute("""
-        SELECT
-            users.query_tokens,
-            auth_providers.name AS auth_provider_name
-        FROM users
-        JOIN auth_providers
-          ON users.auth_provider = auth_providers.id
-        WHERE users.id = ?
-    """, [auth['user_id']]).fetchone()
-
-    if user_row['auth_provider_name'] == "local":
-        return make_system_client()
-
-    tokens = user_row['query_tokens']
-
-    if tokens == 0:
-        raise NoTokensError
-
-    if spend_token:
-        # user.tokens > 0, so decrement it and use the system key
-        db.execute("UPDATE users SET query_tokens=query_tokens-1 WHERE id=?", [auth['user_id']])
-        db.commit()
-        tokens -= 1
-
-    return make_system_client(tokens_remaining = tokens)
 
 
 # For decorator type hints
@@ -184,10 +163,9 @@ def get_models() -> list[Row]:
     models = db.execute("SELECT * FROM models WHERE active ORDER BY id ASC").fetchall()
     return models
 
-
-async def get_completion(client: AsyncOpenAI, model: str, prompt: str | None = None, messages: list[ChatCompletionMessageParam] | None = None) -> tuple[dict[str, str], str]:
+async def get_completion(llm: LLMConfig, messages: list[ChatCompletionMessageParam] | None = None, prompt: str | None = None) -> tuple[dict[str, str], str]:
     '''
-    model can be any valid OpenAI model name that can be used via the chat completion API.
+    Takes an LLMConfig object and either messages or a prompt string.
 
     Returns:
        - A tuple containing:
@@ -195,26 +173,53 @@ async def get_completion(client: AsyncOpenAI, model: str, prompt: str | None = N
            - The response text (stripped)
     '''
     common_error_text = "Error ({error_type}).  Something went wrong with this query.  The error has been logged, and we'll work on it.  For now, please try again."
+    
+    current_app.logger.debug(f"get_completion called with llm.model={llm.model}, prompt={prompt is not None}, messages={messages is not None}")
+    if prompt:
+        current_app.logger.debug(f"Prompt length: {len(prompt)}")
+    if messages:
+        current_app.logger.debug(f"Messages count: {len(messages)}")
     try:
         if messages is None:
-            assert prompt is not None
+            if prompt is None:
+                current_app.logger.error("get_completion called with both prompt=None and messages=None")
+                raise ValueError("Either 'prompt' or 'messages' must be provided")
             messages = [{"role": "user", "content": prompt}]
 
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.25,
-            max_tokens=1000,
-        )
+        # Prepare completion parameters
+        completion_params = {
+            "model": llm.model,
+            "messages": messages,
+            "temperature": 1,
+        }
+        if llm.model.startswith(('gpt-3', 'gpt-3.5')):
+            completion_params["max_tokens"] = 1000
+        else:
+            completion_params["max_completion_tokens"] = 1000
 
-        choice = response.choices[0]
-        response_txt = choice.message.content or ""
+        # Instantiate AsyncOpenAI client here
+        client = AsyncOpenAI(api_key=llm.api_key, base_url=llm.base_url)
+        response = await client.chat.completions.create(**completion_params)
+        current_app.logger.debug(f"Full OpenAI response: {response}")
+        response_txt = ""
+        if hasattr(response, 'choices') and response.choices:
+            choice = response.choices[0]
+            if hasattr(choice, 'message') and getattr(choice.message, 'content', None):
+                response_txt = choice.message.content
+            else:
+                current_app.logger.warning("OpenAI response has no message content.")
+        else:
+            current_app.logger.warning("OpenAI response has no choices.")
 
-        if choice.finish_reason == "length":  # "length" if max_tokens reached
-            response_txt += "\n\n[error: maximum length exceeded]"
+        # if choice.finish_reason == "length":  # "length" if max_tokens reached
+        #     response_txt += "\n\n[error: maximum length exceeded]"
 
         return response.model_dump(), response_txt.strip()
 
+    except ValueError as e:
+        err_str = str(e)
+        response_txt = f"Error (ValueError). {err_str}"
+        current_app.logger.error(f"ValueError in get_completion: {e}")
     except openai.APITimeoutError as e:
         err_str = str(e)
         response_txt = "Error (APITimeoutError).  The system timed out producing the response.  Please try again."

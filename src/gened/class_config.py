@@ -47,12 +47,27 @@ def config_form() -> str:
     class_id = auth['class_id']
 
     class_row = db.execute("""
-        SELECT classes.id, classes.max_queries, classes.enabled, classes_user.link_ident, classes_user.link_reg_expires, classes_user.dartmouth_key, classes_user.model_id
+        SELECT classes.id, classes.max_queries, classes.enabled, contexts.config, classes_user.link_ident, classes_user.link_reg_expires, classes_user.dartmouth_key, classes_user.model_id
         FROM classes
         LEFT JOIN classes_user
           ON classes.id = classes_user.class_id
+        LEFT JOIN contexts
+          ON classes.id = contexts.class_id AND contexts.name = 'Default'
         WHERE classes.id=?
     """, [class_id]).fetchone()
+
+    # Load group configuration from class_group_configs table
+    rows = db.execute(
+        "SELECT group_num, expanded, raw, num_groups FROM class_group_configs WHERE class_id=? ORDER BY group_num",
+        [class_id]
+    ).fetchall()
+    if rows:
+        num_groups = rows[0]["num_groups"]
+        prompts = [row["expanded"] for row in rows]  # Changed from row["prompt"] 
+        prompts_raw = [row["raw"] for row in rows]   # Add this for raw prompts
+        group_config = {"num_groups": num_groups, "prompts": prompts, "prompts_raw": prompts_raw}
+    else:
+        group_config = None
 
     # TODO: refactor into function for checking start/end dates
     expiration_date = class_row['link_reg_expires']
@@ -66,6 +81,10 @@ def config_form() -> str:
         link_reg_state = "date"
 
     extra_sections = [render() for render in _extra_config_renderfuncs]  # rendered HTML for any extra config sections
+
+    # Pass group_config to template
+    class_row = dict(class_row) if class_row else {}
+    class_row['group_config'] = group_config
 
     return render_template("instructor_class_config.html", class_row=class_row, link_reg_state=link_reg_state, models=get_models(), extra_sections=extra_sections)
 
